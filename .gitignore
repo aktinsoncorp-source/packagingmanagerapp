@@ -19,6 +19,7 @@
 # Keep QA scripts; results, screenshots and copied business files stay local.
 /PackingListApp/qa/*
 !/PackingListApp/qa/*.py
+!/PackingListApp/qa/*.cs
 
 # Retired business-product aliases are not used by the current program.
 /PackingListApp/src/assets/picking_aliases.json
@@ -37,6 +38,8 @@ venv/
 *.tmp
 *.bak
 *.bundle
+**/ProductNames.json*
+**/ProductNames.lock
 Thumbs.db
 Desktop.ini
 

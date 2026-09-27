@@ -10,7 +10,8 @@ This directory contains development files, sanitized document templates, build d
 - `src/PackingListManager.cs`: Windows Forms interface; invokes the packaged engine with JSON requests.
 - `src/extractors.py`: layout-specific readers; quantities are validated without OCR or AI services.
 - `src/documents.py`: clones the approved A4 order tables and appends a per-document product picking summary after a page break.
-- `src/picking.py`: aggregate quantities only for matching original product names and variation text. No aliases, shortening, or inferred variation sizes are applied. The earlier alias catalog is retained as historical QA data and is no longer read by the application.
+- `src/picking.py`: aggregate quantities for matching final product names and variations. `src/names.py` applies user-defined alternatives independently before building a document; blank fields retain the originals. The earlier fixed alias catalog is historical data and is not read by the application.
+- `src/NameDefinitionsForm.cs` and `src/NameExcelSession.cs`: editable name catalog and a temporary desktop Excel session with alternating Export/Import buttons.
 - `src/engine.py`: date-specific file and order history, explicit revisions, recoverable commits and duplicate handling.
 - `src/assets/verify_word.ps1`: verifies A4 paper size and keeps every complete order table on one page using Word's actual pagination.
 - `src/assets/orange.docx` and `blue.docx`: sanitized templates distilled from the approved documents.
@@ -42,7 +43,7 @@ Only existing files are returned to the Completed documents view. They are group
 
 ## Build
 
-Use Python 3.12 with pdfplumber, python-docx and PyInstaller 6.22.3. The current build uses Codex's bundled Python for PDF and document dependencies and project-local PyInstaller in `.builddeps`.
+Use Python 3.12 with pdfplumber, python-docx, openpyxl and PyInstaller 6.22.3. The current build uses Codex's bundled Python for PDF and document dependencies and project-local PyInstaller in `.builddeps`.
 
 Run `build.ps1`. It packages the engine and compiles the Windows Forms interface using the .NET Framework C# compiler. The program runs as the current user and has no network calls.
 
@@ -69,3 +70,15 @@ The smoke test requires a fresh `qa/packaged-smoke` directory to avoid overwriti
 Duplicate history is per dated folder. Scanned PDFs, unknown layouts, repeated order labels inside one PDF, multipackage Shopee labels and continued order pages stop for review. A platform layout change may require updating the corresponding parser.
 
 The employee workflow is one operator on one Windows computer. Processing history belongs with its dated source and output folder. The app reads the earlier human processing log and verifies it against completed documents when importing pre-app history; missing app-era JSON history is an error.
+
+## Define Name (version 1.5)
+
+Compatible PDF scans remember exact original product/variation pairs in the installation's ProductNames.json. Definitions persist across dates and folders. The four editable columns support adding rows, changing originals and alternatives, search, and deletion. Deletion clears alternatives permanently for that row; a later PDF encounter re-adds the pair with a new ID and blank alternatives. Opening the editor or exporting does not rediscover deleted entries.
+
+Alternatives must start with a Unicode letter or number. Internal spaces and the common symbols - ( ) / % . + , & apostrophe are allowed; control characters, leading spaces, and leading symbols are rejected. Each alternative field falls back independently. Final matching pairs share a picking-summary total; source order fingerprints and raw snapshots remain unchanged. Outputs additionally store immutable printed snapshots and the catalog revision so history is accurate after a later rename.
+
+Excel editing uses a program-owned workbook in a unique Windows temporary folder. Export saves grid edits, opens Excel, disables Export, enables Import, and pauses grid editing. Import requires that exact workbook to remain open, saves unsaved Excel edits, validates a merged preview, atomically saves definitions, closes only the temporary workbook, deletes its file, and resets the buttons. Other workbooks stay open. Closing the workbook or Excel first triggers the requested two-line error and resets the session. Invalid imports retain the workbook and original catalog for correction. Hidden stable IDs allow original-name edits; new rows without IDs are added. Rows omitted from Excel stay in the catalog; deletion is explicit in the grid. Formulas and duplicate/conflicting original pairs are rejected. Catalog writes have a file lock, revision checks, atomic replacement, and a preceding-copy .json.bak.
+
+qa/test_names.py tests storage, fallback, validation, deletion/re-encounter, Excel round trips, summary merging and original/printed history. qa/NamesUiSmoke.cs runs the actual form workflow against the packaged engine and desktop Excel, including manual workbook closure, full Excel exit, invalid input recovery, button states and other-workbook preservation. Compile the harness with the two naming UI source files and the same framework references as the main UI. It takes the installed engine path and a fresh QA directory as arguments.
+
+Private historical test fixtures can be selected with PACKING_TEST_DATA. qa/prepare_local_fixtures.py reconstructs an isolated set from retained QA copies and a supplied shop-data root. Production folders and QA evidence are not tracked in Git. The complete 50-test regression suite and all 18 live Excel UI checks passed during the September 27 update. Installed generation and UI reports are recorded separately.

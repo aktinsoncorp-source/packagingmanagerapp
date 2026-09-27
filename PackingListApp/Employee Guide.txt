@@ -1,6 +1,6 @@
 PACKING LIST MANAGER
-Employee guide - version 1.4
-Help updated September 26, 2026
+Employee guide - version 1.5
+Help updated September 27, 2026
 
 Start
 Double-click Packing List Manager.exe. Keep the App Files folder beside it.
@@ -142,14 +142,14 @@ It lists the product, variation or size, and total pieces needed from inventory.
 Each summary covers ONLY the orders in that document. Later batches get their
 own summaries covering the PDFs selected for that run. Regenerating a PDF
 also includes its orders again in that new document and summary.
-The packing tables and picking summary use the original product names and
-variation text from the PDFs. Names are not shortened or renamed, and sizes
-are not added to the variation. A dash represents a missing source variation;
-any size given in the original product name remains in that name.
-Only matching original product names and variations have their pieces added
-together. Different listing names remain separate, even if they used to share
-a shortened summary name. Pieces means packs or bottles, not kilograms or
-liters. Use the Done boxes while collecting stock.
+The packing tables and picking summary use the names saved in Define Name.
+A blank alternative product name keeps the original product name; a blank
+alternative variation keeps the original variation. Each field works separately.
+A dash represents a missing source variation. Sizes are not inferred or added.
+Matching FINAL product names and variations have their pieces added together
+in that document's picking summary. Define the same alternatives for different
+listings only when you want their quantities combined. Pieces means packs or
+bottles, not kilograms or liters. Use the Done boxes while collecting stock.
 Long summaries continue onto additional A4 pages with repeated column headers.
 
 New orders later in the day
@@ -196,7 +196,7 @@ Using Completed documents
 The groups appear in this order: SPX, FLASH, Lazada + TikTok. Within each
 group, files appear in numeric order: _1, _2, _3 ... _10.
 Click the + beside a generated Word file to expand its included source PDFs.
-Expand a PDF to see its order IDs, then expand an order to see the original
+Expand a PDF to see its order IDs, then expand an order to see the printed
 product names, variations and pieces included in that document.
 The displayed data belongs to that generated document, even if the source
 PDF was changed afterward. If two selected PDFs share an order, that order
@@ -253,3 +253,58 @@ Shopee: A4 PDFs with up to four packing labels per page (SPX and FLASH).
 Lazada: order-level packing lists with four item columns.
 TikTok: one order per page with Product Name, SKU, Seller SKU, Qty and Qty Total.
 If an online shop changes its PDF format, the parser may need an update.
+
+Define Name - standard product names
+Click Define Name near the bottom of the main window. The program remembers
+one row per exact original product name and variation found in scanned PDFs,
+across dates and source folders. Unsupported PDFs do not add guessed items.
+Use Search to find a product. The alternative columns are highlighted orange.
+You may edit all four columns, add a row, or select rows and click Delete selected.
+Click Save names to apply direct edits. Clearing an alternative restores the
+original value for that field. Original names and variations are exact matches.
+Changing an original field changes which PDF text that definition matches.
+
+A nonempty alternative must begin with a letter or number, with no leading space
+or symbol. Afterwards, letters, numbers, spaces, and these common symbols are
+allowed: - ( ) / % . + , & apostrophe. A newline or tab is not a valid name.
+
+Deleting a row and saving removes its alternatives. If the same original pair
+is found on a later PDF scan, it is added as a NEW row with blank alternatives.
+Opening Define Name alone does not rediscover deleted rows.
+
+Temporary Excel editing
+Desktop Microsoft Excel is required for these two small buttons.
+1. Export starts enabled; Import starts disabled.
+2. Click Export. Direct edits are saved and the program opens an Excel workbook
+   from an internal temporary folder. It is not saved in your source folder.
+   Export becomes disabled and Import becomes enabled. The grid is temporarily
+   read-only so Excel and the grid cannot overwrite each other's edits.
+3. Edit original names, original variations, and/or alternatives in Excel. Add
+   new rows if needed. Keep the Names sheet and its four visible headings.
+   Hidden row IDs preserve a row's identity when you edit its original fields.
+4. KEEP THIS EXCEL WORKBOOK OPEN. Finish editing the current cell, then click
+   Import in Define Name. The program saves Excel automatically, validates all
+   rows, updates the saved names, closes that workbook, and removes its temporary
+   file. Export becomes enabled and Import becomes disabled again.
+5. If the workbook was closed first, Import displays:
+   Error: No file has been detected
+   Please do not exit excel file before clicking import
+   The buttons reset. Click Export to start again from the program's saved names.
+
+Invalid Excel names, duplicates, changed headings or formulas stop the import
+without changing saved names. Keep Excel open, correct the reported rows, and
+click Import again. Use plain text for all name fields. Blank alternatives clear
+those alternatives. Rows omitted from Excel remain in the program; use Delete
+selected in Define Name to remove them. Closing Define Name with Excel pending
+asks before discarding those unimported changes. Other Excel workbooks remain open.
+
+These definitions affect FUTURE generated files. Existing Word documents and
+their saved contents stay unchanged. To use new names for an already-processed
+PDF, select its Use checkbox and generate another document.
+
+Saved definitions
+ProductNames.json in the Packing List Manager application folder stores the
+names for this installation. ProductNames.json.bak keeps the preceding saved
+catalog. Keep these with the application when moving or backing it up. If the
+catalog becomes unreadable, restore a valid backup; the app does not silently
+replace it. The temporary Excel workbook is an editing session, not a backup.

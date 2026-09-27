@@ -12,6 +12,9 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
+[assembly: System.Reflection.AssemblyVersion("1.5.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.5.0.0")]
+
 namespace PackingListManager {
     static class Program {
         [STAThread]
@@ -54,6 +57,7 @@ namespace PackingListManager {
         readonly Button sourceButton = new Button();
         readonly Button historyButton = new Button();
         readonly Button helpButton = new Button();
+        readonly Button namesButton = new Button();
         readonly HashSet<string> revisions = new HashSet<string>();
         List<Dictionary<string,object>> entries = new List<Dictionary<string,object>>();
         List<Dictionary<string,object>> outputs = new List<Dictionary<string,object>>();
@@ -62,7 +66,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager";
+            Text = "Packing List Manager 1.5";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -116,6 +120,16 @@ namespace PackingListManager {
                                         sources=d.Nodes.Cast<TreeNode>().Where(p=>(p.Tag as CompletedSelection)!=null&&!String.IsNullOrEmpty(((CompletedSelection)p.Tag).Pdf)).Select(p=>new {path=((CompletedSelection)p.Tag).Pdf,orders=p.Nodes.Count}).ToArray()
                                     }).ToArray()}).ToArray()
                                 }));
+                            }
+                        }
+                        if(startupArgs.Length>=5) {
+                            var catalog=await Call(new Dictionary<string,object>{{"action","names_list"}},"Checking Define Name...");
+                            using(var preview=new NameDefinitionsForm(catalog,request=>Call(request,"Checking names..."))) {
+                                preview.StartPosition=FormStartPosition.Manual;preview.Location=new Point(-30000,-30000);
+                                preview.Show();preview.PerformLayout();Application.DoEvents();
+                                using(var bitmap=new Bitmap(preview.Width,preview.Height)) {
+                                    preview.DrawToBitmap(bitmap,new Rectangle(Point.Empty,preview.Size));bitmap.Save(startupArgs[4]);
+                                }
                             }
                         }
                         File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new { ok=lastError==null, rows=grid.Rows.Count, selectable=selectable, autoSelected=autoSelected, manualSelectionWorks=manualSelectionWorks, selectAllWorks=selectAllWorks, summary=summary.Text, status=status.Text, error=lastError }));
@@ -225,6 +239,7 @@ namespace PackingListManager {
             StyleButton(sourceButton,"Open selected PDF",false);sourceButton.Width=180;sourceButton.Click+=(s,e)=>{var en=Selected();if(en!=null)OpenFile(Path.Combine(DateFolder,S(en,"path").Replace('/',Path.DirectorySeparatorChar)));};secondary.Controls.Add(sourceButton);
             StyleButton(reviewButton,"Review changed file...",false);reviewButton.Width=198;reviewButton.Click+=async(s,e)=>await Review();secondary.Controls.Add(reviewButton);
             StyleButton(historyButton,"Completed documents...",false);historyButton.Width=210;historyButton.Click+=(s,e)=>ShowHistory();secondary.Controls.Add(historyButton);
+            StyleButton(namesButton,"Define Name...",false);namesButton.Width=150;namesButton.Click+=async(s,e)=>await ShowNames();secondary.Controls.Add(namesButton);
             layout.Controls.Add(secondary,0,5);
 
             var final=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,Padding=new Padding(0,8,0,5)};
@@ -316,6 +331,7 @@ namespace PackingListManager {
             selectAllUse.Enabled=!value;
             chooseButton.Enabled=!value;scanButton.Enabled=!value;addButton.Enabled=!value;date.Enabled=!value;
             grid.Enabled=!value;generateButton.Enabled=!value;reviewButton.Enabled=!value;sourceButton.Enabled=!value;historyButton.Enabled=!value;
+            namesButton.Enabled=!value;
             if(!value)RefreshSelection();
         }
         async Task<Dictionary<string,object>> Call(Dictionary<string,object> request,string message) {
@@ -323,6 +339,7 @@ namespace PackingListManager {
             string work=Path.Combine(Path.GetTempPath(),"PackingList-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(work);
             try {
                 request["folder"]=DateFolder;
+                if(!request.ContainsKey("catalog_path"))request["catalog_path"]=Path.Combine(appDir,"ProductNames.json");
                 string input=Path.Combine(work,"request.json"),output=Path.Combine(work,"response.json");
                 File.WriteAllText(input,json.Serialize(request),new UTF8Encoding(false));
                 string engine=Path.Combine(appDir,"App Files","PackingEngine.exe");
@@ -506,6 +523,12 @@ namespace PackingListManager {
             PopulateHistoryTree(tree,caption);return form;
         }
 
+        async Task ShowNames() {
+            try {
+                var catalog=await Call(new Dictionary<string,object>{{"action","names_list"}},"Loading product names...");
+                using(var form=new NameDefinitionsForm(catalog,request=>Call(request,"Updating product names...")))form.ShowDialog(this);
+            } catch(Exception ex){ShowError(ex);}
+        }
         void ShowHistory() {using(var form=CreateHistoryForm())form.ShowDialog(this);}
     }
 }

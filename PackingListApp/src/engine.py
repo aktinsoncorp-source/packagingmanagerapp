@@ -20,7 +20,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.4.0'
+VERSION = '1.5.0'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'
@@ -277,7 +277,7 @@ def completed_outputs(folder, history):
     for name, output in history['outputs'].items():
         if not safe_child(folder / '000 Output', name).is_file():
             continue
-        snapshots = output.get('order_snapshots', {})
+        snapshots = output.get('display_order_snapshots', output.get('order_snapshots', {}))
         sources = []
         for source in sorted(output.get('sources', []), key=lambda s: natural(s['path'])):
             included = []
@@ -408,29 +408,34 @@ def scan_internal(folder):
     return entries, batches, history
 
 
-def scan(folder):
+def scan(folder, catalog_path=None):
     out = folder / '000 Output'
     if out.exists():
         with folder_lock(folder):
             recover(out)
-            entries, _, history = scan_internal(folder)
+            entries, batches, history = scan_internal(folder)
             # Save associations while legacy documents still exist, so a later
             # deletion never destroys the PDF-to-Word mapping.
             if history['outputs'] and (not (out / HISTORY).exists() or
                     json.loads((out / HISTORY).read_text(encoding='utf-8')) != history):
                 atomic_json(out / HISTORY, history)
     else:
-        entries, _, history = scan_internal(folder)
+        entries, batches, history = scan_internal(folder)
+    if catalog_path is not None:
+        from names import encounter
+        encounter(catalog_path, batches.values())
     return {'ok': True, 'entries': entries, 'folder': str(folder), 'output_folder': str(out),
             'outputs': completed_outputs(folder, history), 'version': VERSION}
 
 
-def generate(folder, selected, verifier=verify_word):
+def generate(folder, selected, verifier=verify_word, catalog_path=None):
     if not selected:
         raise PackingError('Select at least one PDF to generate.')
     with folder_lock(folder) as out:
         recover(out)
         entries, batches, history = scan_internal(folder)
+        from names import encounter, apply_names
+        catalog = encounter(catalog_path, batches.values()) if catalog_path is not None else {'revision': 0, 'rows': []}
         entry_map = {e['path']: e for e in entries}
         chosen, seen = [], set()
         modes, skipped = {}, {}
@@ -474,9 +479,10 @@ def generate(folder, selected, verifier=verify_word):
                 filename = next_output_filename(out, group, folder.name, reserved)
                 reserved.add(filename)
                 dest = stage / filename
-                selected_batches = [batch for _, batch in values]
+                selected_batches = apply_names([batch for _, batch in values], catalog)
                 build_document(selected_batches, group, folder.name, dest, revision=(mode=='revision'))
-                plans.append({'filename': filename, 'group': group, 'mode': mode, 'values': values, 'dest': dest})
+                plans.append({'filename': filename, 'group': group, 'mode': mode, 'values': values, 'dest': dest,
+                              'display_batches': selected_batches})
             verification = verifier([p['dest'] for p in plans])
             page_counts = {Path(v['path']).name: v['pages'] for v in verification}
             for selection in selected:
@@ -485,6 +491,7 @@ def generate(folder, selected, verifier=verify_word):
                     raise PackingError(f'{key} changed while the documents were generated. Scan again.')
             when = datetime.now().isoformat(timespec='seconds')
             lines = [f'COMPLETED BY PACKING LIST MANAGER {VERSION}', f'Time: {when}',
+                     f'Product name definitions revision: {catalog["revision"]}',
                      'Each selected PDF contributes its orders. Repeated orders within this run appear once.',
                      'Selected PDFs: ' + ', '.join(s['path'] for s in selected)]
             if history.get('legacy'):
@@ -547,6 +554,8 @@ def generate(folder, selected, verifier=verify_word):
                 new_history['outputs'][name] = {'group': plan['group'], 'orders': keys, 'mode': mode, 'created': when,
                                                'status': 'active', 'pages': page_counts.get(name), 'removed_orders': sorted(removed),
                                                'order_fingerprints': fingerprints, 'sources': sources, 'record_id': record_id,
+                                               'name_catalog_revision': catalog['revision'],
+                                               'display_order_snapshots': {o.key: asdict(o) for b in plan['display_batches'] for o in b.orders},
                                                'order_snapshots': {o.key: asdict(o) for _, b in values for o in b.orders}}
                 lines += ['', name, f'Generation record: {record_id}', f'Status: Completed and checked ({mode})',
                           f'{len(keys)} orders | {sum(len(o.items) for _,b in values for o in b.orders)} product rows | '
@@ -640,10 +649,17 @@ def import_pdfs(folder, paths, carrier=None):
 
 
 def handle(request):
-    folder = dated_folder(request['folder'])
     action = request['action']
-    if action == 'scan': return scan(folder)
-    if action == 'generate': return generate(folder, request['selected'])
+    from names import load_catalog, save_catalog, export_excel, import_excel
+    default_root = Path(sys.executable).parent.parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[2] / 'Packing List Manager'
+    catalog_path = Path(request.get('catalog_path', default_root / 'ProductNames.json')).resolve()
+    if action == 'names_list': return {'ok': True, **load_catalog(catalog_path)}
+    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'])}
+    if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))
+    if action == 'names_import': return import_excel(Path(request['path']), request['rows'])
+    folder = dated_folder(request['folder'])
+    if action == 'scan': return scan(folder, catalog_path)
+    if action == 'generate': return generate(folder, request['selected'], catalog_path=catalog_path)
     if action == 'import': return import_pdfs(folder, request['files'], request.get('carrier'))
     if action == 'acknowledge': return acknowledge(folder, request['selected'])
     raise PackingError('Unknown action.')

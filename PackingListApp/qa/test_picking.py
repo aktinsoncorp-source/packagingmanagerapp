@@ -1,11 +1,12 @@
 import sys
+import os
 import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[1]
-ROOT = APP.parent
+ROOT = Path(os.environ.get('PACKING_TEST_DATA', APP.parent))
 sys.path.insert(0, str(APP / 'src'))
 from docx import Document
 from extractors import Batch, Item, Order, PackingError, parse_pdf

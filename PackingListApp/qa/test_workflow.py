@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / 'PackingListApp'
+APP = Path(__file__).resolve().parents[1]
+ROOT = Path(__import__('os').environ.get('PACKING_TEST_DATA', APP.parent))
 sys.path.insert(0, str(APP / 'src'))
 import engine
 from documents import build_document
