@@ -1,0 +1,666 @@
+"""Local batch processing with content verification and recoverable commits."""
+from __future__ import annotations
+
+from collections import defaultdict
+from contextlib import contextmanager
+from dataclasses import asdict, replace
+from datetime import datetime
+from pathlib import Path
+import argparse
+import copy
+import json
+import os
+import re
+import shutil
+import sys
+import uuid
+
+from docx import Document
+
+from extractors import Batch, Item, Order, PackingError, clean, file_hash, parse_pdf
+from documents import build_document, verify_word
+
+VERSION = '1.4.0'
+HISTORY = 'Processing_History.json'
+LOG = 'Processed_Files.txt'
+JOURNAL = '.packing-transaction.json'
+
+
+def natural(value):
+    return [int(x) if x.isdigit() else x.lower() for x in re.split(r'(\d+)', str(value))]
+
+
+def dated_folder(value):
+    p = Path(value).resolve()
+    try:
+        datetime.strptime(p.name, '%Y%m%d')
+    except ValueError:
+        raise PackingError('Choose a dated folder named YYYYMMDD, such as 20260926.')
+    if not re.fullmatch(r'\d{8}', p.name):
+        raise PackingError('The dated folder name must contain exactly eight digits: YYYYMMDD.')
+    return p
+
+
+def relpath(path, folder):
+    try:
+        return Path(path).resolve().relative_to(folder.resolve()).as_posix()
+    except ValueError:
+        raise PackingError('The selected PDF must be inside the chosen dated folder. Use Add PDFs to copy it there.')
+
+
+def atomic_json(path, value):
+    temp = path.with_name(path.name + '.tmp-' + uuid.uuid4().hex)
+    with temp.open('w', encoding='utf-8', newline='\n') as f:
+        json.dump(value, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp, path)
+
+
+@contextmanager
+def folder_lock(folder):
+    out = folder / '000 Output'
+    out.mkdir(parents=True, exist_ok=True)
+    lock = (out / '.packing.lock').open('a+b')
+    try:
+        import msvcrt
+        lock.seek(0)
+        if not lock.read(1):
+            lock.write(b'0')
+            lock.flush()
+        lock.seek(0)
+        try:
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            raise PackingError('This date is being processed in another window. Wait for it to finish.')
+        try:
+            yield out
+        finally:
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    finally:
+        lock.close()
+
+
+def safe_child(out, relative):
+    p = (out / relative).resolve()
+    if not p.is_relative_to(out.resolve()):
+        raise PackingError('A saved processing record contains an invalid path. Ask your supervisor to review it.')
+    return p
+
+
+def recover(out):
+    journal = out / JOURNAL
+    if not journal.exists():
+        return
+    try:
+        plan = json.loads(journal.read_text(encoding='utf-8'))
+        for entry in plan['files']:
+            target = safe_child(out, entry['target'])
+            source = safe_child(out, entry['stage'])
+            if target.exists():
+                if file_hash(target) != entry['sha256']:
+                    raise PackingError(f'Interrupted batch: {target.name} differs from the saved record. Keep all files and ask your supervisor to review.')
+            elif source.exists() and file_hash(source) == entry['sha256']:
+                os.rename(source, target)
+            else:
+                raise PackingError('Interrupted batch: a completed document is missing. Keep the processing files and ask your supervisor to review.')
+        atomic_json(out / HISTORY, plan['history'])
+        log = out / LOG
+        text = log.read_text(encoding='utf-8-sig') if log.exists() else 'PACKING LIST PROCESSING LOG\n'
+        marker = 'Transaction: ' + plan['id']
+        if marker not in text:
+            with log.open('a', encoding='utf-8', newline='\n') as f:
+                f.write('\n' + plan['log'] + '\n' + marker + '\n')
+                f.flush()
+                os.fsync(f.fileno())
+        journal.unlink()
+        stage = safe_child(out, plan['stage_dir'])
+        if stage.exists() and not any(stage.iterdir()):
+            stage.rmdir()
+    except PackingError:
+        raise
+    except Exception as exc:
+        raise PackingError(f'Cannot recover the interrupted batch: {exc}. Keep the processing files for review.') from exc
+
+
+def commit(out, history, files, stage, log):
+    plan = {'id': uuid.uuid4().hex, 'history': history, 'files': files,
+            'stage_dir': stage.name, 'log': log}
+    atomic_json(out / JOURNAL, plan)
+    recover(out)
+
+
+def read_completed_doc(path, group):
+    from picking import is_picking_table
+    records = {}
+    d = Document(path)
+    summary_total = None
+    for table in d.tables:
+        if is_picking_table(table):
+            if summary_total is not None or table._tbl is not d.tables[-1]._tbl:
+                raise PackingError(f'The earlier document {path.name} has an unexpected summary location.')
+            try:
+                quantities = [int(r.cells[3].text) for r in table.rows[1:-1]]
+                summary_total = int(table.rows[-1].cells[3].text)
+                if (table.rows[-1].cells[1].text != 'TOTAL PIECES' or not quantities
+                        or any(q <= 0 for q in quantities) or sum(quantities) != summary_total):
+                    raise ValueError('invalid total')
+            except (ValueError, IndexError) as exc:
+                raise PackingError(f'The earlier document {path.name} has an invalid picking summary.') from exc
+            continue
+        head = table.cell(0, 0).text
+        m = re.search(r'Order (ID|Number):\s*(\w+)', head)
+        if not m or len(table.rows) < 3:
+            raise PackingError(f'The earlier document {path.name} has an unfamiliar order table.')
+        platform = ('LAZADA' if m[1] == 'Number' else 'TIKTOK') if group == 'LAZADA_TIKTOK' else group
+        if platform == 'LAZADA':
+            platform = 'LAZADA'
+        items = [Item(clean(r.cells[1].text), clean(r.cells[2].text), int(r.cells[3].text)) for r in table.rows[2:]]
+        order = Order(platform, m[2], items)
+        records[order.key] = {'fingerprint': order.fingerprint(), 'order': asdict(order),
+                              'output': path.name, 'source': 'Earlier completed document'}
+    if summary_total is not None and summary_total != sum(i['pieces'] for r in records.values() for i in r['order']['items']):
+        raise PackingError(f'The picking summary in {path.name} does not match its orders.')
+    return records
+
+
+def load_history(folder, batches):
+    out = folder / '000 Output'
+    p = out / HISTORY
+    if p.exists():
+        try:
+            h = json.loads(p.read_text(encoding='utf-8'))
+            if h.get('schema') != 1 or h.get('date') != folder.name:
+                raise ValueError('version or date mismatch')
+            for field in ('sources', 'orders', 'outputs'):
+                if not isinstance(h.get(field), dict): raise ValueError('invalid ' + field)
+            return h
+        except Exception as exc:
+            raise PackingError(f'Processing_History.json cannot be read ({exc}). Restore its backup before processing more orders.') from exc
+    h = {'schema': 1, 'date': folder.name, 'sources': {}, 'orders': {}, 'outputs': {}, 'legacy': False}
+    log_path = out / LOG
+    docs = list(out.glob('*_Packing_Checklist_*.docx')) if out.exists() else []
+    if not log_path.exists():
+        if docs:
+            raise PackingError('Completed packing documents exist, but Processed_Files.txt is missing. Restore the log before making another batch.')
+        return h
+    text = log_path.read_text(encoding='utf-8-sig')
+    if 'COMPLETED BY PACKING LIST MANAGER' in text or re.search(r'^Transaction:', text, re.M):
+        raise PackingError('Processing_History.json is missing from a batch created by this app. Restore that file from backup before continuing.')
+    h['legacy'] = True
+    blocks = re.split(r'(?m)^(?=[A-Z_]+_Packing_Checklist_.*\.docx\s*$)', text)[1:]
+    recorded_paths = set()
+    missing_sources = set()
+    for block in blocks:
+        lines = block.splitlines()
+        name = lines[0].strip()
+        source_paths = [m.replace('\\','/') for m in re.findall(r'^\s+-\s+(.+?\.pdf)\s*\|', block, re.M)]
+        recorded_paths.update(source_paths)
+        if re.search(r'^Status:\s*SUPERSEDED', block, re.M):
+            continue
+        path = safe_child(out, name)
+        group = name.split('_Packing_Checklist_')[0]
+        if group not in ('SPX','FLASH','LAZADA','LAZADA_TIKTOK'):
+            raise PackingError(f'Unrecognized earlier output group in {name}.')
+        if path.is_file():
+            records = read_completed_doc(path, group)
+        else:
+            # Pre-app logs identify the source PDFs even if their Word file was
+            # deleted before the first migration. No old content is inferred.
+            records = {}
+            missing_sources.update(source_paths)
+        h['orders'].update(records)
+        h['outputs'][name] = {'group': group, 'orders': list(records), 'mode': 'legacy',
+                              'created': 'Before Packing List Manager', 'status': 'active',
+                              'order_fingerprints': {k: v['fingerprint'] for k, v in records.items()},
+                              'sources': [{'path': key, 'sha256': None,
+                                           'order_keys': [o.key for o in batches[key].orders if o.key in records] if key in batches else []}
+                                          for key in source_paths]}
+    if not blocks:
+        raise PackingError('The existing processing log could not be imported safely. Ask your supervisor to review it.')
+    for key, batch in batches.items():
+        if key not in recorded_paths:
+            continue
+        same = all(o.key in h['orders'] and h['orders'][o.key]['fingerprint'] == o.fingerprint() for o in batch.orders)
+        missing_only = key in missing_sources and not any(o.key in h['orders'] for o in batch.orders)
+        h['sources'][key] = {'sha256': batch.sha256 if same or missing_only else None,
+                             'platform': batch.platform, 'order_keys': [o.key for o in batch.orders],
+                             'outputs': sorted(name for name, output in h['outputs'].items() if any(s['path'] == key for s in output['sources'])),
+                             'legacy_missing': missing_only,
+                             'note': 'Earlier Word output missing; regenerate from the current PDF' if missing_only else
+                                     ('Verified against earlier completed documents' if same else 'Earlier source differs from completed documents')}
+    for key in recorded_paths - batches.keys():
+        h['sources'][key] = {'sha256': None, 'order_keys': [], 'outputs': [], 'note': 'Source named in earlier processing log'}
+    return h
+
+
+def upgrade_output_links(folder, history):
+    """Add immutable per-output source/order manifests to older app records."""
+    changed = False
+    for name, output in history['outputs'].items():
+        records = None
+        if 'order_fingerprints' not in output:
+            path = safe_child(folder / '000 Output', name)
+            records = read_completed_doc(path, output['group']) if path.is_file() else {}
+            output['order_fingerprints'] = {key: value['fingerprint'] for key, value in records.items()}
+            for key, value in history['orders'].items():
+                if value['output'] == name:
+                    output['order_fingerprints'].setdefault(key, value['fingerprint'])
+            changed = True
+        if 'order_snapshots' not in output:
+            if records is None:
+                path = safe_child(folder / '000 Output', name)
+                records = read_completed_doc(path, output['group']) if path.is_file() else {}
+            output['order_snapshots'] = {}
+            for key, fingerprint in output.get('order_fingerprints', {}).items():
+                saved = records.get(key) or history['orders'].get(key)
+                if saved and saved['fingerprint'] == fingerprint:
+                    output['order_snapshots'][key] = saved['order']
+            changed = True
+        if 'record_id' not in output:
+            output['record_id'] = uuid.uuid4().hex
+            changed = True
+        if 'sources' not in output:
+            output['sources'] = []
+            for key, source in history['sources'].items():
+                order_keys = sorted(set(source.get('order_keys', [])) & set(output['orders']))
+                if name in source.get('outputs', []) or order_keys:
+                    output['sources'].append({'path': key, 'sha256': source.get('sha256'), 'order_keys': order_keys})
+            changed = True
+    return changed
+
+
+def completed_outputs(folder, history):
+    """Visible files in platform/numeric order, with their saved included data."""
+    result = []
+    for name, output in history['outputs'].items():
+        if not safe_child(folder / '000 Output', name).is_file():
+            continue
+        snapshots = output.get('order_snapshots', {})
+        sources = []
+        for source in sorted(output.get('sources', []), key=lambda s: natural(s['path'])):
+            included = []
+            for key in source.get('order_keys', []):
+                if key not in output['orders']:
+                    continue
+                order = snapshots.get(key)
+                included.append(copy.deepcopy(order) if order else {'order_id': key.split(':', 1)[-1], 'items': [], 'details_available': False})
+            sources.append({'path': source['path'], 'orders': included,
+                            'pieces': sum(i['pieces'] for order in included for i in order['items'])})
+        match = re.search(r'_(\d+)\.docx$', name, re.I)
+        result.append({'filename': name, 'group': output['group'], 'sequence': int(match[1]) if match else 0,
+                       'status': output['status'], 'exists': True, 'created': output.get('created', ''),
+                       'order_count': len(output['orders']), 'pieces': sum(i['pieces'] for o in snapshots.values() for i in o['items']),
+                       'included_sources': sources, 'record_id': output['record_id']})
+    platform_order = {'SPX': 0, 'FLASH': 1, 'LAZADA_TIKTOK': 2, 'LAZADA': 3}
+    return sorted(result, key=lambda o: (platform_order.get(o['group'], 4), o['sequence'], o['filename']))
+
+
+def next_output_filename(out, group, date, reserved=()):
+    prefix = f'{group}_Packing_Checklist_{datetime.strptime(date,"%Y%m%d"):%Y-%m-%d}_'
+    numbers = []
+    for name in [p.name for p in out.glob('*.docx') if p.is_file()] + list(reserved):
+        match = re.fullmatch(re.escape(prefix) + r'(\d+)\.docx', name, re.I)
+        if match:
+            numbers.append(int(match[1]))
+    return f'{prefix}{max(numbers, default=0)+1}.docx'
+
+
+def available_order_outputs(folder, history):
+    """All surviving copies of the current order version, excluding revisions."""
+    available = defaultdict(list)
+    for name, output in history['outputs'].items():
+        if output.get('status') == 'superseded' or not safe_child(folder / '000 Output', name).is_file():
+            continue
+        for key, fingerprint in output.get('order_fingerprints', {}).items():
+            if key not in output.get('superseded_orders', []):
+                available[(key, fingerprint)].append(name)
+    return available
+
+
+def batch_details(batch, old=None):
+    parts = [f'{batch.platform} | {len(batch.orders)} orders | {batch.pieces} pieces', '']
+    if old:
+        parts.extend(['PREVIOUSLY RECORDED', old, '', 'CURRENT PDF', ''])
+    for order in batch.orders:
+        parts.append(f'Order {order.order_id}')
+        for i in order.items:
+            parts.append(f'  {i.pieces} pcs | {i.product} | {i.variation}')
+        parts.append('')
+    return '\r\n'.join(parts)
+
+
+def scan_internal(folder):
+    batches, errors = {}, {}
+    if folder.exists():
+        paths = sorted((p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.pdf'
+                        and '000 Output' not in p.relative_to(folder).parts), key=natural)
+        for path in paths:
+            key = relpath(path, folder)
+            try:
+                batches[key] = parse_pdf(path)
+            except Exception as exc:
+                errors[key] = str(exc)
+    history = load_history(folder, batches)
+    upgrade_output_links(folder, history)
+    available = available_order_outputs(folder, history)
+    occurrences = defaultdict(list)
+    for key, batch in batches.items():
+        for order in batch.orders:
+            occurrences[order.key].append((key, order.fingerprint()))
+    conflicts = {key for values in occurrences.values() if len({fp for _, fp in values}) > 1 for key, _ in values}
+    seen = {}
+    entries = []
+    for key in sorted(set(batches) | set(errors), key=natural):
+        if key in errors:
+            entries.append({'path': key, 'platform': '', 'status': 'ERROR', 'message': errors[key],
+                            'details': errors[key], 'orders': 0, 'pieces': 0, 'new_orders': 0, 'sha256': '', 'outputs': []})
+            continue
+        batch = batches[key]
+        source = history['sources'].get(key)
+        prior = history['orders']
+        changed_orders = [o for o in batch.orders if o.key in prior and prior[o.key]['fingerprint'] != o.fingerprint()]
+        uncovered = [o for o in batch.orders if not available.get((o.key, o.fingerprint()))
+                     and not prior.get(o.key, {}).get('removed_from_source_in')]
+        fresh = [o for o in uncovered if o.key not in seen]
+        old_outputs = sorted(name for name, output in history['outputs'].items()
+                             if any(o.key in output['orders'] for o in batch.orders)
+                             or any(s['path'] == key for s in output.get('sources', [])))
+        missing_outputs = [name for name in old_outputs if not safe_child(folder / '000 Output', name).is_file()]
+        ignored = bool(source and source.get('ignored_changes') and source.get('sha256') == batch.sha256)
+        old_text = None
+        if key in conflicts:
+            status, message = 'ERROR', 'Conflicting versions of the same order are present in this dated folder. Keep the correct PDF and scan again.'
+        elif (source and source.get('sha256') != batch.sha256) or (changed_orders and not ignored) or (ignored and changed_orders and missing_outputs):
+            status, message = 'REVIEW', 'File or order details changed. Review the previous and current versions before continuing.'
+            prior_lines = []
+            keys = set(source.get('order_keys', []) if source else []) | {o.key for o in changed_orders}
+            for oid in sorted(keys):
+                if oid in prior:
+                    saved = prior[oid]
+                    prior_lines.append(f"Order {saved['order']['order_id']} — {saved['output']}")
+                    for item in saved['order']['items']:
+                        prior_lines.append(f"  {item['pieces']} pcs | {item['product']} | {item['variation']}")
+            old_text = '\r\n'.join(prior_lines) or 'An earlier source file is recorded in the processing log.'
+        elif ignored and changed_orders:
+            status, message = 'DONE', 'Earlier output kept. Review this changed PDF to generate its current contents.'
+        elif fresh and (missing_outputs or any(o.key in prior for o in fresh) or (source and source.get('legacy_missing'))):
+            status, message = 'MISSING', f'Output missing — {len(fresh)} orders without a Word file; ready to generate again'
+        elif source and source.get('sha256') == batch.sha256 and not uncovered:
+            status, message = 'DONE', 'Processed — select to generate again'
+        elif fresh:
+            status, message = 'READY', f'{len(fresh)} new orders ready'
+            skipped = len(batch.orders) - len(fresh)
+            if skipped: message += f'; {skipped} other orders also included if selected'
+        else:
+            status, message = 'DUPLICATE', 'Repeated orders — select to generate again'
+        if status in ('READY','MISSING','DONE','DUPLICATE'):
+            for o in batch.orders:
+                seen.setdefault(o.key, key)
+        links = '\r\n'.join(('MISSING: ' if name in missing_outputs else 'Word output: ') + name for name in old_outputs)
+        entries.append({'path': key, 'platform': batch.platform, 'status': status, 'message': message,
+                        'details': (links + '\r\n\r\n' if links else '') + batch_details(batch, old_text), 'orders': len(batch.orders),
+                        'pieces': batch.pieces, 'new_orders': len(fresh) if status == 'READY' else 0,
+                        'missing_orders': len(fresh) if status == 'MISSING' else 0,
+                        'requires_revision': status == 'REVIEW' or bool(ignored and changed_orders),
+                        'sha256': batch.sha256, 'outputs': old_outputs, 'missing_outputs': missing_outputs})
+    return entries, batches, history
+
+
+def scan(folder):
+    out = folder / '000 Output'
+    if out.exists():
+        with folder_lock(folder):
+            recover(out)
+            entries, _, history = scan_internal(folder)
+            # Save associations while legacy documents still exist, so a later
+            # deletion never destroys the PDF-to-Word mapping.
+            if history['outputs'] and (not (out / HISTORY).exists() or
+                    json.loads((out / HISTORY).read_text(encoding='utf-8')) != history):
+                atomic_json(out / HISTORY, history)
+    else:
+        entries, _, history = scan_internal(folder)
+    return {'ok': True, 'entries': entries, 'folder': str(folder), 'output_folder': str(out),
+            'outputs': completed_outputs(folder, history), 'version': VERSION}
+
+
+def generate(folder, selected, verifier=verify_word):
+    if not selected:
+        raise PackingError('Select at least one PDF to generate.')
+    with folder_lock(folder) as out:
+        recover(out)
+        entries, batches, history = scan_internal(folder)
+        entry_map = {e['path']: e for e in entries}
+        chosen, seen = [], set()
+        modes, skipped = {}, {}
+        for selection in sorted(selected, key=lambda s: not bool(s.get('revision'))):
+            key = selection['path'].replace('\\','/')
+            entry = entry_map.get(key)
+            if not entry or selection.get('sha256') != entry['sha256']:
+                raise PackingError(f'{key} changed after the scan. Scan again before generating.')
+            revision = bool(selection.get('revision'))
+            if entry.get('requires_revision') and not revision:
+                raise PackingError(f'{key} needs an explicit revision review.')
+            if entry['status'] not in ('READY','MISSING','DONE','REVIEW','DUPLICATE'):
+                raise PackingError(f'{key} is not ready to generate: {entry["message"]}')
+            batch = batches[key]
+            orders = []
+            skipped[key] = []
+            for o in batch.orders:
+                if o.key in seen:
+                    skipped[key].append(o.order_id)
+                else:
+                    orders.append(o)
+                    seen.add(o.key)
+            if orders:
+                chosen.append((key, replace(batch, orders=orders)))
+                modes[key] = 'revision' if revision else 'standard'
+        if not chosen:
+            raise PackingError('No readable orders remain in the selected PDFs.')
+        grouped = defaultdict(list)
+        for key, batch in chosen:
+            # Revisions have a distinct file from genuinely new orders.
+            grouped[(batch.group, modes[key])].append((key, batch))
+        stage = out / ('.pending-' + uuid.uuid4().hex)
+        stage.mkdir()
+        files, plans, reserved = [], [], set()
+        new_history = copy.deepcopy(history)
+        try:
+            for (group, mode), values in sorted(grouped.items()):
+                if mode == 'standard':
+                    mode = 'regenerated' if any(entry_map[key]['status'] == 'MISSING' or any(o.key in history['orders'] for o in batch.orders)
+                                                for key, batch in values) else 'new'
+                filename = next_output_filename(out, group, folder.name, reserved)
+                reserved.add(filename)
+                dest = stage / filename
+                selected_batches = [batch for _, batch in values]
+                build_document(selected_batches, group, folder.name, dest, revision=(mode=='revision'))
+                plans.append({'filename': filename, 'group': group, 'mode': mode, 'values': values, 'dest': dest})
+            verification = verifier([p['dest'] for p in plans])
+            page_counts = {Path(v['path']).name: v['pages'] for v in verification}
+            for selection in selected:
+                key = selection['path'].replace('\\','/')
+                if file_hash(batches[key].path) != batches[key].sha256:
+                    raise PackingError(f'{key} changed while the documents were generated. Scan again.')
+            when = datetime.now().isoformat(timespec='seconds')
+            lines = [f'COMPLETED BY PACKING LIST MANAGER {VERSION}', f'Time: {when}',
+                     'Each selected PDF contributes its orders. Repeated orders within this run appear once.',
+                     'Selected PDFs: ' + ', '.join(s['path'] for s in selected)]
+            if history.get('legacy'):
+                lines.append('Earlier PDF-to-Word associations retained from the processing log and available documents; source fingerprints saved in Processing_History.json.')
+                new_history['legacy'] = False
+            for plan in plans:
+                name, mode, values = plan['filename'], plan['mode'], plan['values']
+                record_id = uuid.uuid4().hex
+                if name in new_history['outputs']:
+                    # A deleted suffix may be reused for unrelated PDFs. Retain
+                    # its old manifest separately so it cannot cover new files.
+                    previous = new_history['outputs'].pop(name)
+                    new_history.setdefault('archived_outputs', []).append(
+                        {'filename': name, **previous, 'archived_at': when, 'reason': 'Missing filename reused'})
+                    lines.append(f'{name}: previous missing-file record archived; filename reused for this generation.')
+                keys = [o.key for _, b in values for o in b.orders]
+                replaced = defaultdict(set)
+                removed = set()
+                def record_replacements(order_key):
+                    for old_name, old in new_history['outputs'].items():
+                        if order_key in old['orders'] and (mode == 'revision' or
+                                (plan['group'] == 'LAZADA_TIKTOK' and old['group'] == 'LAZADA')):
+                            replaced[old_name].add(order_key)
+                for key, batch in values:
+                    if mode == 'revision':
+                        previous_keys = set(history['sources'].get(key, {}).get('order_keys', []))
+                        removed.update(previous_keys - {o.key for o in batch.orders})
+                        for removed_key in previous_keys - {o.key for o in batch.orders}:
+                            if removed_key in new_history['orders']:
+                                prior = new_history['orders'][removed_key]
+                                record_replacements(removed_key)
+                                prior['removed_from_source_in'] = name
+                    for o in batch.orders:
+                        record_replacements(o.key)
+                        new_history['orders'][o.key] = {'fingerprint': o.fingerprint(), 'order': asdict(o), 'output': name,
+                                                      'output_record_id': record_id, 'source': key}
+                    original = batches[key]
+                    new_history['sources'][key] = {'sha256': original.sha256, 'platform': original.platform,
+                                                  'order_keys': [o.key for o in original.orders],
+                                                  'outputs': sorted(set(history['sources'].get(key, {}).get('outputs', [])) | {name}),
+                                                  'note': 'Completed revision' if mode=='revision' else 'Processed — select to generate again', 'created': when}
+                for old_name, replaced_keys in replaced.items():
+                    old = new_history['outputs'].get(old_name)
+                    if old:
+                        all_replaced = set(old.get('superseded_orders', [])) | replaced_keys
+                        old['superseded_orders'] = sorted(all_replaced)
+                        old['status'] = 'superseded' if set(old['orders']) <= all_replaced else 'partially superseded'
+                        old.setdefault('replacements', []).append(name)
+                        lines.append(f'{old_name}: {old["status"]}; replacement {name}; affected orders ' + ', '.join(k.split(':',1)[1] for k in sorted(replaced_keys)))
+                fingerprints = {o.key: o.fingerprint() for _, b in values for o in b.orders}
+                sources = []
+                for selection in selected:
+                    key = selection['path'].replace('\\','/')
+                    batch = batches[key]
+                    if batch.group != plan['group'] or bool(selection.get('revision')) != (mode == 'revision'):
+                        continue
+                    linked_keys = [o.key for o in batch.orders if fingerprints.get(o.key) == o.fingerprint()]
+                    if linked_keys:
+                        sources.append({'path': key, 'sha256': batch.sha256, 'order_keys': linked_keys})
+                new_history['outputs'][name] = {'group': plan['group'], 'orders': keys, 'mode': mode, 'created': when,
+                                               'status': 'active', 'pages': page_counts.get(name), 'removed_orders': sorted(removed),
+                                               'order_fingerprints': fingerprints, 'sources': sources, 'record_id': record_id,
+                                               'order_snapshots': {o.key: asdict(o) for _, b in values for o in b.orders}}
+                lines += ['', name, f'Generation record: {record_id}', f'Status: Completed and checked ({mode})',
+                          f'{len(keys)} orders | {sum(len(o.items) for _,b in values for o in b.orders)} product rows | '
+                          f'{sum(b.pieces for _,b in values)} pieces | {page_counts.get(name)} A4 pages', 'Source PDFs:']
+                if removed:
+                    lines.append('    Removed from revised source (retained in history for duplicate prevention): ' + ', '.join(k.split(':',1)[1] for k in sorted(removed)))
+                for source in sources:
+                    key = source['path']
+                    lines.append(f'  - {key} | {len(source["order_keys"])} linked orders | SHA256 {source["sha256"]}')
+                    lines.append('    Order IDs: ' + ', '.join(k.split(':', 1)[1] for k in source['order_keys']))
+                    if skipped[key]: lines.append('    Shared orders printed once in this run: ' + ', '.join(skipped[key]))
+                files.append({'target': name, 'stage': plan['dest'].relative_to(out).as_posix(), 'sha256': file_hash(plan['dest'])})
+            for selection in selected:
+                key = selection['path'].replace('\\','/')
+                batch = batches[key]
+                linked_outputs = [name for name, output in new_history['outputs'].items()
+                                  if any(s['path'] == key for s in output.get('sources', []))]
+                new_history['sources'][key] = {'sha256': batch.sha256, 'platform': batch.platform,
+                                              'order_keys': [o.key for o in batch.orders], 'outputs': linked_outputs,
+                                              'note': 'Processed — select to generate again', 'created': when}
+            for key, source in new_history['sources'].items():
+                source['outputs'] = [name for name, output in new_history['outputs'].items()
+                                     if any(s['path'] == key for s in output.get('sources', []))]
+            for entry in files:
+                if safe_child(out, entry['target']).exists():
+                    raise PackingError(f'{entry["target"]} appeared while generating. Scan again to choose the next available number.')
+            commit(out, new_history, files, stage, '\n'.join(lines))
+        except Exception:
+            # Leave an existing commit journal intact for deterministic recovery.
+            if not (out / JOURNAL).exists() and stage.exists():
+                for p in stage.iterdir():
+                    if p.is_file(): p.unlink()
+                stage.rmdir()
+            raise
+        return {'ok': True, 'message': f'Created {len(plans)} packing document(s).',
+                'outputs': [{'path': str(out/p['filename']), 'filename': p['filename'],
+                             'pages': page_counts.get(p['filename']), 'mode': p['mode']} for p in plans]}
+
+
+def acknowledge(folder, selection):
+    with folder_lock(folder) as out:
+        recover(out)
+        entries, batches, history = scan_internal(folder)
+        key = selection['path']
+        entry = next((e for e in entries if e['path']==key), None)
+        if not entry or not entry.get('requires_revision') or entry['sha256'] != selection.get('sha256'):
+            raise PackingError('This file changed after review. Scan again.')
+        batch = batches[key]
+        history['sources'][key] = {'sha256': batch.sha256, 'platform': batch.platform,
+                                  'order_keys': [o.key for o in batch.orders], 'outputs': entry['outputs'],
+                                  'ignored_changes': True,
+                                  'note': 'Changed file reviewed and ignored; use the earlier output'}
+        stage = out / ('.pending-' + uuid.uuid4().hex)
+        stage.mkdir()
+        commit(out, history, [], stage,
+               f'CHANGED FILE REVIEW {datetime.now().isoformat(timespec="seconds")}\n'
+               f'{key}\nSHA256 {batch.sha256}\nDecision: Keep earlier completed output; ignore this changed version. No new document generated.')
+    return {'ok': True, 'message': 'Review saved. The earlier output remains the packing record.'}
+
+
+def import_pdfs(folder, paths, carrier=None):
+    folder.mkdir(parents=True, exist_ok=True)
+    imported, skipped, errors = [], [], []
+    for value in paths:
+        source = Path(value).resolve()
+        try:
+            if source.suffix.lower() != '.pdf': raise PackingError('Only PDF files can be added.')
+            batch = parse_pdf(source, carrier)
+            target_folder = folder / ('LAZADA & TIKTOK' if batch.group=='LAZADA_TIKTOK' else batch.group)
+            target_folder.mkdir(exist_ok=True)
+            matches = [p for p in target_folder.iterdir() if p.is_file() and p.suffix.lower()=='.pdf' and file_hash(p)==batch.sha256]
+            if matches:
+                skipped.append(source.name)
+                continue
+            target = target_folder / source.name
+            n = 2
+            while target.exists():
+                target = target_folder / f'{source.stem}_import_{n}.pdf'
+                n += 1
+            temp = target_folder / ('.import-' + uuid.uuid4().hex)
+            try:
+                shutil.copyfile(source, temp)
+                if file_hash(temp) != batch.sha256: raise PackingError('The source changed during import. Wait for the download to finish.')
+                os.rename(temp, target)
+            finally:
+                if temp.exists(): temp.unlink()
+            imported.append(str(target))
+        except Exception as exc:
+            errors.append({'file': source.name, 'message': str(exc)})
+    return {'ok': True, 'imported': imported, 'skipped': skipped, 'errors': errors}
+
+
+def handle(request):
+    folder = dated_folder(request['folder'])
+    action = request['action']
+    if action == 'scan': return scan(folder)
+    if action == 'generate': return generate(folder, request['selected'])
+    if action == 'import': return import_pdfs(folder, request['files'], request.get('carrier'))
+    if action == 'acknowledge': return acknowledge(folder, request['selected'])
+    raise PackingError('Unknown action.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--request', required=True)
+    parser.add_argument('--response', required=True)
+    args = parser.parse_args()
+    try:
+        request = json.loads(Path(args.request).read_text(encoding='utf-8-sig'))
+        result = handle(request)
+    except Exception as exc:
+        result = {'ok': False, 'error': str(exc)}
+    Path(args.response).write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
+
+
+if __name__ == '__main__':
+    main()
