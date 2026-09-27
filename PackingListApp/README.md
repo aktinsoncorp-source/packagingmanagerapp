@@ -82,3 +82,33 @@ Excel editing uses a program-owned workbook in a unique Windows temporary folder
 qa/test_names.py tests storage, fallback, validation, deletion/re-encounter, Excel round trips, summary merging and original/printed history. qa/NamesUiSmoke.cs runs the actual form workflow against the packaged engine and desktop Excel, including manual workbook closure, full Excel exit, invalid input recovery, button states and other-workbook preservation. Compile the harness with the two naming UI source files and the same framework references as the main UI. It takes the installed engine path and a fresh QA directory as arguments.
 
 Private historical test fixtures can be selected with PACKING_TEST_DATA. qa/prepare_local_fixtures.py reconstructs an isolated set from retained QA copies and a supplied shop-data root. Production folders and QA evidence are not tracked in Git. The complete 50-test regression suite and all 18 live Excel UI checks passed during the September 27 update. Installed generation and UI reports are recorded separately.
+
+
+## Define Name update (version 1.6)
+
+Schema 2 stores each base original pair plus `aliases`, a list of the other
+original product/variation pairs linked to the definition. Matching uses uppercased
+pairs with trailing spaces removed. All four catalog fields use uppercase; original
+PDF Item objects, order snapshots and fingerprints remain unchanged. Single-line
+validation rejects control characters and Unicode line/paragraph separators.
+
+`names_prepare` validates and reports matching nonblank alternative pairs without
+writing. The form confirms each candidate group on Save and Import. Approved ID
+lists are passed to `names_save`; the first selected ID is the base (first displayed
+or worksheet order if none selected). Declined groups remain separate. Only matching
+nonblank alternatives may merge. Source-pair lookup spans bases and all aliases.
+The View column exposes linked originals; search includes them. Removing a definition
+removes all its pairs; future PDF encounters re-add them separately with blank aliases.
+
+Excel exports every source pair, with hidden definition and original-pair IDs.
+All original fields remain editable after a merge. Omitted rows are retained.
+Changes to alternatives in one linked row propagate to its definition; contradictory
+new values fail the entire import. Names imports normalize before comparisons.
+Schema 1 upgrades under the catalog lock with a preceding backup; no source scan or
+re-seeding occurs during migration. User-deleted entries stay deleted until encountered.
+
+`qa/test_name_merging.py` covers merged lookup, yes/no outcomes, preferred base,
+case-insensitive matching, trimming, paragraphs, migration, deletion and Excel links.
+`qa/NamesUiSmoke.cs` also exercises these behaviors in the real form and desktop Excel.
+Use `PYTHONUTF8=1` when running the historical Windows test suite.
+The build script accepts `-ReleasePath` for testing a staged build before installation.

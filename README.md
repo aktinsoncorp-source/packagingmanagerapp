@@ -2,7 +2,7 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.5.0**.
+Current engine version: **1.6.0**.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -64,7 +64,7 @@ The 16 synthetic regeneration tests require no production PDFs or Microsoft Word
 & .\.venv\Scripts\python.exe -m unittest discover -s .\PackingListApp\qa -p test_regeneration.py -v
 ```
 
-The full suite contains 50 tests. Several tests and development
+The full suite contains 66 tests. Several tests and development
 helpers require the private September 24-26 source PDFs and approved Word files
 at their original dated paths. Those fixtures and generated QA reports are not
 distributed in Git. Restore them separately before running the full suite.
@@ -76,7 +76,7 @@ A Git bundle is a portable copy of committed repository history. To restore a
 provided bundle into a new folder:
 
 ```powershell
-git clone "Git/v1.5.0/PackingListManager-1.5.0.bundle" "PackingListManager-Restored"
+git clone "Git/v1.6.0/PackingListManager-1.6.0.bundle" "PackingListManager-Restored"
 ```
 
 This restores the tracked program files. It does not restore the installed
@@ -84,10 +84,19 @@ release, business PDFs, completed documents, processing history, or other ignore
 files. Copy those separately when moving the working application.
 
 After reviewing and committing a later release, create a new `Git/vVERSION`
-folder, create its named bundle with `git bundle create <new-bundle-path> --all`,
+folder, create its named bundle with `git bundle create <new-bundle-path> main`,
 then run `git bundle verify <new-bundle-path>`. Preserve earlier version folders
 and never overwrite a prior checkpoint. These backups are snapshots and do not
 automatically update after new commits.
 
 Keep a copy on another drive or an authorized private remote to protect against
 loss of this computer. A bundle stored only beside the project is still local.
+
+
+## Version 1.6 - merged standardized names
+
+Define Name can merge matching alternative product/variation pairs after confirmation.
+The first selected definition stays as the base and retains every linked original pair.
+View reveals the linked pairs. All four fields are uppercase, trailing spaces are trimmed,
+and multiline input is rejected. Excel edits preserve links and can edit every original.
+Local source checkpoint: `Git/v1.6.0`; older version folders remain available.

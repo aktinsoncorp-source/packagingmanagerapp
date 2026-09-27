@@ -17,7 +17,7 @@ folder = work / '20260926'
 (folder / 'SPX').mkdir(parents=True)
 shutil.copyfile(APP / 'qa/packaged-smoke/20260926/SPX/20260926_SPX_PL_4.pdf', folder / 'SPX/test.pdf')
 catalog = work / 'ProductNames.json'
-exe = ROOT / 'Packing List Manager/App Files/PackingEngine.exe'
+exe = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'Packing List Manager/App Files/PackingEngine.exe'
 
 
 def call(action, **kwargs):
@@ -31,23 +31,26 @@ def call(action, **kwargs):
 
 
 scan = call('scan')
-assert scan['version'] == '1.5.0'
+assert scan['version'] == '1.6.0'
 data = call('names_list')
 assert data['rows']
 for row in data['rows']:
     row['alternative_product'] = 'QA Standard Inventory Item'
     row['alternative_variation'] = 'Standard / 1 pack'
-call('names_save', rows=data['rows'], revision=data['revision'])
+preview = call('names_prepare', rows=data['rows'])
+saved = call('names_save', rows=preview['rows'], revision=data['revision'], merge_groups=[g['ids'] for g in preview['merges']])
+assert len(saved['rows']) == 1
+assert len(saved['rows'][0]['aliases']) == len(data['rows']) - 1
 result = call('generate', selected=[{'path': e['path'], 'sha256': e['sha256']} for e in scan['entries']])
 output = Path(result['outputs'][0]['path'])
 doc = Document(output)
 assert len(doc.tables) == 8
 assert len(doc.tables[-1].rows) == 3
-assert doc.tables[-1].cell(1, 1).text == 'QA Standard Inventory Item'
+assert doc.tables[-1].cell(1, 1).text == 'QA STANDARD INVENTORY ITEM'
 assert doc.tables[-1].cell(1, 3).text == '8'
 assert call('scan')['entries'][0]['status'] == 'DONE'
 layout = verify_word([output], export_pdf=True)
-report = {'ok': True, 'version': '1.5.0', 'work': str(work), 'output': str(output), 'layout': layout,
+report = {'ok': True, 'version': '1.6.0', 'work': str(work), 'output': str(output), 'layout': layout,
           'orders': 7, 'pieces': 8, 'summary_rows': 1, 'original_fingerprints_preserved': True}
 (APP / 'qa/names-packaged-verification.json').write_text(json.dumps(report, indent=2))
 print(json.dumps(report, indent=2))

@@ -1,17 +1,19 @@
-# Packing List Manager 1.5 handover
+# Packing List Manager 1.6 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.5.0. The preceding installed 1.4 release
-is preserved locally in PackingListApp/qa/previous-release-1.4.0.
+The executable and engine are version 1.6.0. The preceding installed 1.5 release,
+including its latest private catalog, is preserved in qa/previous-release-1.5.0.
+The earlier 1.4 backup also remains. Installed files match the staged build.
 
-## New feature
+## Version 1.5 foundation
 
-Define Name appears near the bottom of the main screen. It remembers each exact
-original product/variation pair across dates and folders. The original fields
+Define Name appears near the bottom of the main screen. It remembers original
+product/variation pairs across dates and folders. Version 1.6 matches without
+case differences or trailing spaces. The original fields
 and alternative fields are editable. Blank alternatives fall back independently.
 Alternatives must start with a letter or number; common internal symbols are
 allowed. Deleting a row and saving removes its alternatives. A later PDF scan
@@ -61,6 +63,45 @@ report: PackingListApp/qa/names-catalog-seed.json.
   qa/names-main.png, qa/names-editor.png, qa/names-ui-verification.json.
 - No production packing documents were regenerated during verification.
 
+## Version 1.6 merged definitions
+
+All four catalog fields now normalize to uppercase and remove trailing spaces.
+Control characters, line breaks and Unicode paragraph separators are rejected.
+Original PDF objects, quantities, order fingerprints and historical printed snapshots
+are preserved. The four editable UI fields retain soft wrapping for readability.
+
+Save names and Excel Import use names_prepare to identify equal, nonblank alternative
+product AND variation pairs without writing. The form asks Yes/No per group. Yes saves
+one base row plus all other original pairs in its aliases list. No keeps separate
+entries. Matching is case insensitive. Selection order chooses the first base; if
+none is selected, first visible-list order is used. Excel uses worksheet order.
+Every pair in a merged definition is recognized on later scans. View (N) exposes all
+linked originals and search finds them. Deleting a merged definition deletes all its
+links; later encounters return independent rows with blank alternatives.
+
+Excel exports one row per original pair with two hidden IDs: definition ID and the
+original pair before editing. This allows every linked original to be changed while
+retaining one merged definition. Omitted rows are retained. An alternative changed on
+one linked row updates the shared definition; conflicting changes abort the import.
+The original temporary Excel lifecycle and closed-file errors still work.
+
+Schema 1 upgrades to schema 2 under the existing file lock with an atomic write and
+backup. Installation preserved all 189 current definitions, IDs and user deletions,
+normalizing revision 7 to 8. Do not re-seed the catalog from all historical PDFs;
+actual future scans alone may legitimately rediscover deleted pairs.
+
+Version 1.6 verification (September 27):
+- 66 regression tests: qa/names-1.6-tests.log (run with PYTHONUTF8=1).
+- 35 actual Windows form + desktop Excel checks on the installed engine:
+  qa/names-1.6-excel-verification.json. Yes/No, first-selected base, uppercase entry,
+  multiline rejection, linked originals, Excel merges, cleanup and search all passed.
+- A staged-engine generation created 7 orders / 8 pieces on 2 A4 pages, with one
+  merged picking-summary row, preserved original fingerprints and no split orders.
+  qa/names-packaged-verification.json; both rendered pages were visually reviewed.
+- Existing production documents were not regenerated. The installed UI and engine
+  version is 1.6.0; qa/names-1.6-migration-verification.json records the catalog upgrade.
+- Source and full employee help are updated. Local Git checkpoint is in Git/v1.6.0.
+
 ## Maintenance
 
 Read PackingListApp/README.md and Employee Guide.txt. Current dependencies are in
@@ -75,7 +116,7 @@ a supplied shop-data root. The live shop folders now have different filenames an
 include waybills, so do not point the historical suite directly at them. The latest
 successful fixture root is PackingListApp/qa/names-regression-fixtures.
 
-Git stays local. Keep version bundles in Git/v1.4.0, Git/v1.5.0, etc. Never overwrite
+Git stays local. Keep version bundles in Git/v1.4.0, Git/v1.5.0, Git/v1.6.0, etc. Never overwrite
 an earlier version checkpoint. Use git log for the current commit ID. Bundles hold
 source/history and sanitized assets, not installed executables or business data.
 Do not upload to GitHub until requested. Copy backups off this computer separately.

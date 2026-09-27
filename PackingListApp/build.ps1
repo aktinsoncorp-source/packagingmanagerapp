@@ -1,7 +1,7 @@
-param([string]$Python = 'C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe', [switch]$UiOnly)
+param([string]$Python = 'C:\Users\Admin\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe', [switch]$UiOnly, [string]$ReleasePath)
 $ErrorActionPreference = 'Stop'
 $project = $PSScriptRoot
-$release = Join-Path (Split-Path $project -Parent) 'Packing List Manager'
+$release = if ($ReleasePath) { [System.IO.Path]::GetFullPath($ReleasePath) } else { Join-Path (Split-Path $project -Parent) 'Packing List Manager' }
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 if (-not $UiOnly) {
 $env:PYTHONPATH = Join-Path $project '.builddeps'

@@ -1,5 +1,5 @@
 PACKING LIST MANAGER
-Employee guide - version 1.5
+Employee guide - version 1.6
 Help updated September 27, 2026
 
 Start
@@ -255,56 +255,86 @@ TikTok: one order per page with Product Name, SKU, Seller SKU, Qty and Qty Total
 If an online shop changes its PDF format, the parser may need an update.
 
 Define Name - standard product names
-Click Define Name near the bottom of the main window. The program remembers
-one row per exact original product name and variation found in scanned PDFs,
-across dates and source folders. Unsupported PDFs do not add guessed items.
-Use Search to find a product. The alternative columns are highlighted orange.
-You may edit all four columns, add a row, or select rows and click Delete selected.
-Click Save names to apply direct edits. Clearing an alternative restores the
-original value for that field. Original names and variations are exact matches.
-Changing an original field changes which PDF text that definition matches.
+Click Define Name near the bottom of the main window. Definitions apply across
+platforms, dates and source folders. Matching ignores letter case and trailing
+spaces. Unsupported PDFs do not add guessed items.
 
-A nonempty alternative must begin with a letter or number, with no leading space
-or symbol. Afterwards, letters, numbers, spaces, and these common symbols are
-allowed: - ( ) / % . + , & apostrophe. A newline or tab is not a valid name.
+All four name fields are converted to UPPERCASE. Spaces at the end are removed;
+spaces between words remain. Enter a single line only: paragraphs, line breaks,
+and tabs are rejected. Long names may wrap on screen for readability; that does
+not insert a line break into the saved name.
 
-Deleting a row and saving removes its alternatives. If the same original pair
-is found on a later PDF scan, it is added as a NEW row with blank alternatives.
-Opening Define Name alone does not rediscover deleted rows.
+The alternative columns are highlighted orange. You may edit all four columns,
+add a row, or select rows and click Delete selected. Click Save names to apply.
+Blank alternatives fall back independently to the original product or variation,
+in uppercase. A nonempty alternative must begin with a letter or number, with
+no leading space or symbol. These common symbols are allowed afterwards:
+- ( ) / % . + , & apostrophe.
+
+Merging matching definitions
+When Save names or Excel Import finds definitions with the SAME nonempty
+alternative product name AND alternative variation, it asks whether to merge.
+Case differences and trailing spaces do not make the alternatives different.
+- Yes: keep one definition and remember ALL its original product/variation pairs.
+- No: save the edits but keep the definitions separate.
+- Blank alternative fields never trigger a merge.
+
+To choose the base, select its row first, then Ctrl-click any other rows you
+want selected. Save names checks every matching alternative pair, including
+unselected rows. Within each matching group the first selected row is the base;
+if none is selected, the first listed row is used. Excel imports use the first
+matching definition in worksheet order. The confirmation shows the base before
+you choose Yes. Names always use uppercase after normalization.
+
+The Original pairs column shows View (N). Click it to see every linked original
+pair, with the base first. Search also finds the linked originals. Later scans
+recognize all linked originals and do not recreate separate definitions for them.
+Changing the shared alternatives updates how every linked pair prints.
+
+Deleting a definition and saving removes its alternatives and ALL its linked
+originals. If any original pair appears in a later scan, it returns as a NEW,
+separate definition with blank alternatives. Opening Define Name or exporting
+alone does not rediscover deleted pairs.
 
 Temporary Excel editing
 Desktop Microsoft Excel is required for these two small buttons.
 1. Export starts enabled; Import starts disabled.
-2. Click Export. Direct edits are saved and the program opens an Excel workbook
-   from an internal temporary folder. It is not saved in your source folder.
-   Export becomes disabled and Import becomes enabled. The grid is temporarily
-   read-only so Excel and the grid cannot overwrite each other's edits.
-3. Edit original names, original variations, and/or alternatives in Excel. Add
-   new rows if needed. Keep the Names sheet and its four visible headings.
-   Hidden row IDs preserve a row's identity when you edit its original fields.
-4. KEEP THIS EXCEL WORKBOOK OPEN. Finish editing the current cell, then click
-   Import in Define Name. The program saves Excel automatically, validates all
-   rows, updates the saved names, closes that workbook, and removes its temporary
-   file. Export becomes enabled and Import becomes disabled again.
-5. If the workbook was closed first, Import displays:
+2. Click Export. Direct edits are saved, including any merge confirmation, and
+   the program opens Excel from an internal temporary folder. Export becomes
+   disabled and Import enabled. The program's grid pauses editing.
+3. Excel includes ONE ROW PER ORIGINAL PAIR, including every linked original in
+   a merged definition, so all original names and variations can be edited.
+   These rows remain one merged definition when imported. Keep the Names sheet,
+   four visible headings and hidden identification columns intact.
+4. You may edit the four name columns or add new rows. Changing an alternative
+   in one linked row updates that alternative for the entire merged definition.
+   Conflicting new values on linked rows are rejected; use one shared value.
+   Omitted Excel rows remain in memory; delete definitions through the program.
+5. KEEP THE EXCEL WORKBOOK OPEN. Finish editing the cell, then click Import.
+   The program saves Excel, normalizes/validates all names, asks about any new
+   matching definitions, and saves. It closes only that workbook, deletes its
+   temporary file, then enables Export and disables Import again.
+6. If you closed the workbook first, Import displays:
    Error: No file has been detected
    Please do not exit excel file before clicking import
-   The buttons reset. Click Export to start again from the program's saved names.
+   The buttons reset. Export again to start from the saved names.
 
-Invalid Excel names, duplicates, changed headings or formulas stop the import
-without changing saved names. Keep Excel open, correct the reported rows, and
-click Import again. Use plain text for all name fields. Blank alternatives clear
-those alternatives. Rows omitted from Excel remain in the program; use Delete
-selected in Define Name to remove them. Closing Define Name with Excel pending
-asks before discarding those unimported changes. Other Excel workbooks remain open.
+Invalid names, duplicate original pairs, conflicting linked edits, changed
+headings or formulas stop the import without changing saved names. Keep Excel
+open, correct the reported rows, and Import again. Use plain text. Multiline
+Excel cells are rejected. Other open Excel workbooks remain open.
 
-These definitions affect FUTURE generated files. Existing Word documents and
-their saved contents stay unchanged. To use new names for an already-processed
-PDF, select its Use checkbox and generate another document.
+Generated documents
+Changes affect FUTURE generated documents. Existing documents and their saved
+printed contents stay unchanged. To apply new names to a processed PDF, select
+its Use checkbox and generate another document. Matching final product/variation
+pairs combine in that document's picking summary. Original PDF data, quantities,
+and source fingerprints remain unchanged.
 
 Saved definitions
-ProductNames.json in the Packing List Manager application folder stores the
-names for this installation. ProductNames.json.bak keeps the preceding saved
-catalog. Keep these with the application when moving or backing it up. If the
-catalog becomes unreadable, restore a valid backup; the app does not silently
-replace it. The temporary Excel workbook is an editing session, not a backup.
+ProductNames.json beside the program stores the definitions and linked original
+pairs. ProductNames.json.bak keeps the preceding saved catalog. Keep these with
+the application when moving or backing it up. Version 1.6 upgrades the existing
+catalog to uppercase with its IDs and deletions preserved, and keeps a backup.
+If the catalog is unreadable, restore a valid backup; it is not silently replaced.
+The temporary Excel workbook is an editing session, not a backup.

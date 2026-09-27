@@ -55,22 +55,22 @@ class NameTests(unittest.TestCase):
             row = data['rows'][0]
             row.update(alternative_product=name, alternative_variation=variation)
             printed = names.apply_names([self.batch], data)[0].orders[0].items[0]
-            self.assertEqual(printed.product, name or 'Listing A')
-            self.assertEqual(printed.variation, variation or 'Lemon,1 L')
+            self.assertEqual(printed.product, (name or 'Listing A').upper())
+            self.assertEqual(printed.variation, (variation or 'Lemon,1 L').upper())
             self.assertEqual(printed.pieces, 2)
         self.assertEqual(self.batch.orders[0].items[0].product, 'Listing A')
 
     def test_final_names_merge_in_summary_and_quantities_stay_correct(self):
         catalog = self.defined()
         printed = names.apply_names([self.batch], catalog)
-        self.assertEqual(picking_rows(printed), [('Dish Soap', 'Lemon (1 L)', 5)])
+        self.assertEqual(picking_rows(printed), [('DISH SOAP', 'LEMON (1 L)', 5)])
 
     def test_validation_rejects_leading_spaces_symbols_and_controls(self):
-        for value in [' Soap', '-Soap', ' Soap ', '   ', '=SUM(A1)', 'Soap\nNew', 'Soap\tNew', 'Soap@Home']:
+        for value in [' Soap', '-Soap', ' Soap ', '=SUM(A1)', 'Soap\nNew', 'Soap\tNew', 'Soap@Home']:
             with self.subTest(value=value), self.assertRaises(PackingError):
                 names.validate_alternative(value, 'Name')
         for value in ['', 'Soap - Lemon (1 L) / 50% + Oil', "Men's Soap, 1.5 L & Oil", '洗衣液 1L']:
-            self.assertEqual(names.validate_alternative(value, 'Name'), value)
+            self.assertEqual(names.validate_alternative(value, 'Name'), value.upper())
 
     def test_delete_stays_deleted_until_next_encounter_then_blank(self):
         data = self.defined()
@@ -125,10 +125,10 @@ class NameTests(unittest.TestCase):
         self.assertEqual(self.path.read_bytes(), before)
         self.assertEqual((preview['added'], preview['updated']), (1, 2))
         saved = names.save_catalog(self.path, preview['rows'], data['revision'])
-        updated = next(r for r in saved['rows'] if r['original_product'] == 'Renamed original')
+        updated = next(r for r in saved['rows'] if r['original_product'] == 'RENAMED ORIGINAL')
         self.assertEqual(updated['id'], data['rows'][0]['id'])
         self.assertEqual(updated['alternative_variation'], '')
-        self.assertFalse(any(r['original_product'] == 'Listing A' for r in saved['rows']))
+        self.assertFalse(any(r['original_product'] == 'LISTING A' for r in saved['rows']))
 
     def test_excel_missing_rows_are_retained(self):
         data = self.seed()
@@ -166,14 +166,14 @@ class NameTests(unittest.TestCase):
         names.export_excel(self.book, data)
         wb = load_workbook(self.book)
         self.assertEqual(wb['Names']['A2'].data_type, 's')
-        self.assertEqual(wb['Names']['A2'].value, '=literal listing')
+        self.assertEqual(wb['Names']['A2'].value, '=LITERAL LISTING')
         wb.close()
 
     def test_missing_variation_matches_dash_and_blank(self):
         self.batch.orders[0].items[0].variation = ''
         catalog = self.seed()
         catalog['rows'][0]['alternative_variation'] = 'Standard'
-        self.assertEqual(names.apply_names([self.batch], catalog)[0].orders[0].items[0].variation, 'Standard')
+        self.assertEqual(names.apply_names([self.batch], catalog)[0].orders[0].items[0].variation, 'STANDARD')
 
     def test_generation_preserves_original_fingerprints_and_printed_history(self):
         folder = self.root / '20260926'
@@ -187,8 +187,8 @@ class NameTests(unittest.TestCase):
             selection = [{'path': 'SPX/test.pdf', 'sha256': self.batch.sha256}]
             result = engine.generate(folder, selection, verifier=lambda paths: [{'path': str(p), 'pages': 2} for p in paths], catalog_path=self.path)
             doc = Document(result['outputs'][0]['path'])
-            self.assertEqual(doc.tables[0].cell(2, 1).text, 'Dish Soap')
-            self.assertEqual(doc.tables[0].cell(2, 2).text, 'Lemon (1 L)')
+            self.assertEqual(doc.tables[0].cell(2, 1).text, 'DISH SOAP')
+            self.assertEqual(doc.tables[0].cell(2, 2).text, 'LEMON (1 L)')
             self.assertEqual(len(doc.tables[-1].rows), 3)
             self.assertEqual(doc.tables[-1].cell(1, 3).text, '5')
             after = engine.scan(folder, self.path)
@@ -198,7 +198,7 @@ class NameTests(unittest.TestCase):
             catalog['rows'][0]['alternative_product'] = 'Later name'
             names.save_catalog(self.path, catalog['rows'], catalog['revision'])
             old = engine.scan(folder, self.path)['outputs'][0]['included_sources'][0]['orders'][0]['items'][0]
-            self.assertEqual(old['product'], 'Dish Soap')
+            self.assertEqual(old['product'], 'DISH SOAP')
 
     def test_names_actions_work_without_a_selected_date(self):
         request = {'action': 'names_list', 'catalog_path': str(self.path)}

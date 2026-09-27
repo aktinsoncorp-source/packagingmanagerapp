@@ -33,6 +33,57 @@ namespace PackingListManager {
             if(!(bool)result["ok"])throw new Exception(Convert.ToString(result["error"]));return result;
         }
         static bool Enabled(NameDefinitionsForm form,string name){return form.Controls.Find(name,true)[0].Enabled;}
+        static List<Dictionary<string,object>> Rows(object value){return ((System.Collections.IEnumerable)value).Cast<object>().Cast<Dictionary<string,object>>().ToList();}
+        static async Task TestMerging() {
+            catalog=Path.Combine(work,"MergedProductNames.json");
+            var data=await Call(new Dictionary<string,object>{{"action","names_save"},{"revision",0},{"rows",new[]{
+                new {original_product="First original",original_variation="One",alternative_product="Same name",alternative_variation="Size"},
+                new {original_product="Second original",original_variation="Two",alternative_product="SAME NAME ",alternative_variation="size "}}}});
+            using(var form=new NameDefinitionsForm(data,Call)) {
+                form.SuppressDialogs=true;form.StartPosition=FormStartPosition.Manual;form.Location=new System.Drawing.Point(-30000,-30000);form.Show();
+                var grid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
+                int prompts=0;string baseName="";
+                form.ConfirmMerge=g=>{prompts++;baseName=Convert.ToString(g["base_product"]);return false;};
+                Check(await form.SaveNames()&&prompts==1&&grid.Rows.Count==3,"Declining merge keeps two definitions");
+                grid.ClearSelection();grid.CurrentCell=grid.Rows[1].Cells[0];grid.Rows[1].Selected=true;grid.Rows[0].Selected=true;
+                string firstSelected=Convert.ToString(((Dictionary<string,object>)grid.Rows[1].Tag)["id"]);
+                form.ConfirmMerge=g=>{prompts++;baseName=Convert.ToString(g["base_product"]);return true;};
+                Check(await form.SaveNames()&&prompts==2&&grid.Rows.Count==2,"Confirming merge leaves one definition");
+                Check(baseName=="SECOND ORIGINAL"&&Convert.ToString(((Dictionary<string,object>)grid.Rows[0].Tag)["id"])==firstSelected,"First selected row is kept as base");
+                Check(Convert.ToString(grid.Rows[0].Cells[4].Value)=="View (2)","Merged definition shows linked original count");
+                grid.CurrentCell=grid.Rows[0].Cells[2];grid.BeginEdit(true);
+                var editor=grid.EditingControl as TextBox;
+                Check(editor!=null&&!editor.Multiline&&editor.CharacterCasing==CharacterCasing.Upper,"Grid editor enforces single line and uppercase");
+                editor.Text="new standardized name   ";grid.EndEdit();
+                Check(Convert.ToString(grid.Rows[0].Cells[2].Value)=="NEW STANDARDIZED NAME","Grid trims trailing spaces and normalizes case");
+                Check(await form.SaveNames(),"Merged definition edits save");
+                grid.Rows[0].Cells[2].Value="First\nSecond";
+                string before=File.ReadAllText(catalog);
+                Check(!await form.SaveNames()&&File.ReadAllText(catalog)==before,"Programmatic multiline paste cannot save");
+                grid.Rows[0].Cells[2].Value="NEW STANDARDIZED NAME";
+                Check(await form.SaveNames(),"Correction after multiline rejection saves");
+                Check(await form.ExportToExcel(),"Merged definition exports to Excel");
+                Check(Convert.ToInt32(form.excel.Workbook.Worksheets["Names"].UsedRange.Rows.Count)==3,"Excel exposes both linked originals for editing");
+                form.excel.Workbook.Worksheets["Names"].Range["A3"].Value2="Renamed linked original ";
+                form.excel.Workbook.Worksheets["Names"].Range["C3"].Value2="Updated shared name ";
+                Check(await form.ImportFromExcel(),"Linked original and shared alternative edits import");
+                Check(grid.Rows.Count==2&&File.ReadAllText(catalog).Contains("RENAMED LINKED ORIGINAL")&&File.ReadAllText(catalog).Contains("UPDATED SHARED NAME"),"Excel import preserves one merged definition");
+                Check(await form.ExportToExcel(),"Merged definition re-exports");
+                form.excel.Workbook.Worksheets["Names"].Range["A4"].Value2="Third original";
+                form.excel.Workbook.Worksheets["Names"].Range["B4"].Value2="Three";
+                form.excel.Workbook.Worksheets["Names"].Range["C4"].Value2="updated shared name";
+                form.excel.Workbook.Worksheets["Names"].Range["D4"].Value2="size";
+                int oldPrompts=prompts;
+                Check(await form.ImportFromExcel()&&prompts==oldPrompts+1&&grid.Rows.Count==2,"Excel import asks before merging a new matching definition");
+                Check(Convert.ToString(grid.Rows[0].Cells[4].Value)=="View (3)","All three original pairs remain linked");
+                var search=form.Controls.OfType<TableLayoutPanel>().First().Controls.OfType<FlowLayoutPanel>().First().Controls.OfType<TextBox>().First();
+                search.Text="Renamed linked original";
+                Check(grid.Rows[0].Visible,"Search finds linked originals as well as the base");
+                search.Clear();
+                using(var bitmap=new System.Drawing.Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new System.Drawing.Rectangle(System.Drawing.Point.Empty,form.Size));bitmap.Save(Path.Combine(work,"merged-names.png"));}
+                form.Close();
+            }
+        }
         static async Task Test() {
             var data=await Call(new Dictionary<string,object>{{"action","names_save"},{"revision",0},{"rows",new[]{
                 new {original_product="Listing A",original_variation="Lemon",alternative_product="",alternative_variation=""},
@@ -56,7 +107,7 @@ namespace PackingListManager {
                 Check(Convert.ToInt32(other.Worksheets.Count)>0,"Other Excel workbook remains open");
                 dynamic otherApp=other.Application;other.Close(false);otherApp.Quit();
                 var saved=File.ReadAllText(catalog);
-                Check(saved.Contains("Standard soap")&&saved.Contains("Updated original")&&saved.Contains("Updated variation")&&saved.Contains("Added original"),"All four columns and new rows imported");
+                Check(saved.Contains("STANDARD SOAP")&&saved.Contains("UPDATED ORIGINAL")&&saved.Contains("UPDATED VARIATION")&&saved.Contains("ADDED ORIGINAL"),"All four columns and new rows imported");
 
                 Check(await form.ExportToExcel(),"Second export starts new session");
                 temp=form.excel.FilePath;form.excel.Workbook.Close(false);
@@ -76,6 +127,7 @@ namespace PackingListManager {
                 Check(await form.ImportFromExcel(),"Corrected workbook imports successfully");
                 form.Close();
             }
+            await TestMerging();
         }
     }
 }

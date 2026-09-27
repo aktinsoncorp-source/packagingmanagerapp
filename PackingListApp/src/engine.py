@@ -20,7 +20,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.5.0'
+VERSION = '1.6.0'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'
@@ -479,7 +479,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None):
                 filename = next_output_filename(out, group, folder.name, reserved)
                 reserved.add(filename)
                 dest = stage / filename
-                selected_batches = apply_names([batch for _, batch in values], catalog)
+                selected_batches = apply_names([batch for _, batch in values], catalog) if catalog_path is not None else [batch for _, batch in values]
                 build_document(selected_batches, group, folder.name, dest, revision=(mode=='revision'))
                 plans.append({'filename': filename, 'group': group, 'mode': mode, 'values': values, 'dest': dest,
                               'display_batches': selected_batches})
@@ -650,11 +650,12 @@ def import_pdfs(folder, paths, carrier=None):
 
 def handle(request):
     action = request['action']
-    from names import load_catalog, save_catalog, export_excel, import_excel
+    from names import load_catalog, save_catalog, export_excel, import_excel, prepare_save
     default_root = Path(sys.executable).parent.parent if getattr(sys, 'frozen', False) else Path(__file__).resolve().parents[2] / 'Packing List Manager'
     catalog_path = Path(request.get('catalog_path', default_root / 'ProductNames.json')).resolve()
     if action == 'names_list': return {'ok': True, **load_catalog(catalog_path)}
-    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'])}
+    if action == 'names_prepare': return prepare_save(request['rows'], request.get('priority', []))
+    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []))}
     if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))
     if action == 'names_import': return import_excel(Path(request['path']), request['rows'])
     folder = dated_folder(request['folder'])

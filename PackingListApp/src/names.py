@@ -1,4 +1,4 @@
-"""Persistent, exact product/variation definitions and Excel round trips."""
+"""Persistent name definitions, linked original pairs, and Excel round trips."""
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -11,62 +11,133 @@ import uuid
 from extractors import Item, PackingError
 
 FIELDS = ('original_product', 'original_variation', 'alternative_product', 'alternative_variation')
-HEADERS = ('Original product name', 'Original variation', 'Alternative product name', 'Alternative variation', 'Entry ID')
+HEADERS = ('Original product name', 'Original variation', 'Alternative product name', 'Alternative variation', 'Entry ID', 'Original pair')
 ALLOWED_SYMBOLS = " -()/%.+,&'"
 
 
+def single_line(value, label):
+    if not isinstance(value, str) or any(ord(c) < 32 or c in '\x7f\x85\u2028\u2029' for c in value):
+        raise PackingError(f'{label} must be a single line of text; line breaks and paragraphs are not allowed.')
+    return value.rstrip(' ').upper()
+
+
 def item_key(product, variation):
-    return product, variation or '—'
+    return product.rstrip(' ').upper(), variation.rstrip(' ').upper() or '—'
 
 
 def validate_alternative(value, label):
-    if not isinstance(value, str):
-        raise PackingError(f'{label} must be text.')
+    value = single_line(value, label)
     if not value:
         return value
     if not value[0].isalnum():
         raise PackingError(f'{label} must start with a letter or number, without a leading space or symbol.')
     if any(not (c.isalnum() or c in ALLOWED_SYMBOLS) for c in value):
         raise PackingError(f'{label} may contain letters, numbers, spaces, and these symbols: - ( ) / % . + , & apostrophe.')
-    return value.rstrip()
+    return value
 
 
-def validate_rows(rows):
+def source_pairs(row):
+    return [{f: row[f] for f in FIELDS[:2]}] + row.get('aliases', [])
+
+
+def _source(value, label):
+    if not isinstance(value, dict):
+        raise PackingError(f'{label}: invalid original pair.')
+    result = {f: single_line(value.get(f, ''), f'{label}: {f.replace("_", " ")}') for f in FIELDS[:2]}
+    if not result['original_product'].strip():
+        raise PackingError(f'{label}: Original product name is required.')
+    result['original_variation'] = result['original_variation'] or '—'
+    return result
+
+
+def validate_rows(rows, allow_shared=False):
     if not isinstance(rows, list):
         raise PackingError('The names list is invalid.')
-    result, keys, ids = [], set(), set()
+    result, keys, ids = [], {}, set()
     for number, row in enumerate(rows, 1):
-        if not isinstance(row, dict):
-            raise PackingError(f'Row {number} is invalid.')
-        entry = {field: row.get(field, '') for field in FIELDS}
-        for field, value in entry.items():
-            if not isinstance(value, str) or any(ord(c) < 32 for c in value):
-                raise PackingError(f'Row {number}: {field.replace("_", " ")} must be a single line of text.')
-        if not entry['original_product'].strip():
-            raise PackingError(f'Row {number}: Original product name is required.')
-        entry['original_variation'] = entry['original_variation'] or '—'
+        label = f'Row {number}'
+        entry = _source(row, label)
         for field in FIELDS[2:]:
-            entry[field] = validate_alternative(entry[field], f'Row {number}: {field.replace("_", " ")}')
-        key = item_key(entry['original_product'], entry['original_variation'])
-        if key in keys:
-            raise PackingError(f'Row {number}: this original product and variation already appear in another row.')
+            entry[field] = validate_alternative(row.get(field, ''), f'{label}: {field.replace("_", " ")}')
         entry['id'] = row.get('id') or uuid.uuid4().hex
         if not isinstance(entry['id'], str) or entry['id'] in ids:
-            raise PackingError(f'Row {number}: duplicate or invalid entry identifier. Start with a fresh export.')
-        keys.add(key)
+            raise PackingError(f'{label}: duplicate or invalid entry identifier. Start with a fresh export.')
+        aliases = row.get('aliases', [])
+        if not isinstance(aliases, list):
+            raise PackingError(f'{label}: invalid linked originals.')
+        entry['aliases'] = []
+        local = set()
+        for index, source in enumerate([entry] + aliases):
+            source = _source(source, label)
+            key = item_key(source['original_product'], source['original_variation'])
+            if key in local:
+                continue  # The first original pair is the base, regardless of case.
+            alternatives = tuple(entry[f] for f in FIELDS[2:])
+            if key in keys and not (allow_shared and all(alternatives) and keys[key] == alternatives):
+                raise PackingError(f'{label}: this original product and variation already belong to another row (ignoring case). Merge matching definitions or use distinct original pairs.')
+            local.add(key)
+            keys[key] = alternatives
+            if index:
+                entry['aliases'].append(source)
         ids.add(entry['id'])
         result.append(entry)
-    return sorted(result, key=lambda r: (r['original_product'].casefold(), r['original_variation'].casefold()))
+    return sorted(result, key=lambda r: (r['original_product'], r['original_variation']))
+
+
+def prepare_save(rows, priority=()):
+    # Assign IDs before sorting so unsorted/Excel order remains the fallback base.
+    pending = copy.deepcopy(rows)
+    for row in pending:
+        if isinstance(row, dict) and not row.get('id'):
+            row['id'] = uuid.uuid4().hex
+    order = list(dict.fromkeys(list(priority) + [r.get('id') for r in pending if isinstance(r, dict)]))
+    validated = validate_rows(pending, allow_shared=True)
+    rank = {identifier: index for index, identifier in enumerate(order)}
+    groups = {}
+    for row in sorted(validated, key=lambda r: rank.get(r['id'], len(rank))):
+        if row['alternative_product'] and row['alternative_variation']:
+            groups.setdefault((row['alternative_product'], row['alternative_variation']), []).append(row)
+    matches = [{'ids': [r['id'] for r in group], 'alternative_product': key[0], 'alternative_variation': key[1],
+                'base_product': group[0]['original_product'], 'base_variation': group[0]['original_variation'],
+                'originals': [source for row in group for source in source_pairs(row)]}
+               for key, group in groups.items() if len(group) > 1]
+    return {'ok': True, 'rows': validated, 'merges': matches}
+
+
+def merge_rows(rows, groups):
+    rows = validate_rows(rows, allow_shared=True)
+    by_id = {r['id']: r for r in rows}
+    consumed = set()
+    for identifiers in groups:
+        if not isinstance(identifiers, list) or len(identifiers) < 2 or len(set(identifiers)) != len(identifiers):
+            raise PackingError('Invalid merge selection.')
+        if any(i not in by_id or i in consumed for i in identifiers):
+            raise PackingError('The merge selection changed. Review the names again.')
+        base = by_id[identifiers[0]]
+        key = tuple(base[f] for f in FIELDS[2:])
+        if not all(key) or any(tuple(by_id[i][f] for f in FIELDS[2:]) != key for i in identifiers):
+            raise PackingError('Merge only rows with matching, nonblank alternative product names AND variations.')
+        pairs = [source for identifier in identifiers for source in source_pairs(by_id[identifier])]
+        base['aliases'] = pairs[1:]
+        for identifier in identifiers[1:]:
+            del by_id[identifier]
+        consumed.update(identifiers)
+    return validate_rows(list(by_id.values()))
 
 
 def _load(path):
     if not path.exists():
-        return {'schema': 1, 'revision': 0, 'rows': []}
+        return {'schema': 2, 'revision': 0, 'rows': []}
     try:
         data = json.loads(path.read_text(encoding='utf-8-sig'))
-        if data['schema'] != 1 or not isinstance(data['revision'], int):
+        if data['schema'] not in (1, 2) or not isinstance(data['revision'], int):
             raise ValueError('unrecognized format')
-        data['rows'] = validate_rows(data['rows'])
+        rows = validate_rows(data['rows'])
+        if data['schema'] == 1:
+            data = {'schema': 2, 'revision': data['revision'] + 1, 'rows': rows}
+            _write(path, data)
+        else:
+            data['rows'] = rows
         return data
     except Exception as exc:
         raise PackingError(f'Cannot read saved product names: {exc}. Keep {path.name} and restore a valid backup.') from exc
@@ -115,23 +186,23 @@ def load_catalog(path):
         return _load(path)
 
 
-def save_catalog(path, rows, revision):
-    validated = validate_rows(rows)
+def save_catalog(path, rows, revision, merge_groups=()):
+    validated = merge_rows(rows, merge_groups)
     with catalog_lock(path):
         current = _load(path)
         if current['revision'] != revision:
             raise PackingError('The names list changed in another operation. Close Define Name, reopen it, and repeat your edits.')
         if current['rows'] != validated:
-            current = {'schema': 1, 'revision': revision + 1, 'rows': validated}
+            current = {'schema': 2, 'revision': revision + 1, 'rows': validated}
             _write(path, current)
         return current
 
 
 def encounter(path, batches):
-    """Remember pairs on an actual PDF scan; list/export never resurrect deletes."""
+    """Remember source pairs on PDF scan, including all linked merged originals."""
     with catalog_lock(path):
         current = _load(path)
-        known = {item_key(r['original_product'], r['original_variation']) for r in current['rows']}
+        known = {item_key(s['original_product'], s['original_variation']) for r in current['rows'] for s in source_pairs(r)}
         rows = list(current['rows'])
         for batch in batches:
             for order in batch.orders:
@@ -141,22 +212,22 @@ def encounter(path, batches):
                         rows.append(dict(zip(FIELDS, [key[0], key[1], '', ''])))
                         known.add(key)
         if len(rows) != len(current['rows']):
-            current = {'schema': 1, 'revision': current['revision'] + 1, 'rows': validate_rows(rows)}
+            current = {'schema': 2, 'revision': current['revision'] + 1, 'rows': validate_rows(rows)}
             _write(path, current)
         return current
 
 
 def apply_names(batches, catalog):
-    mapping = {item_key(r['original_product'], r['original_variation']): r for r in catalog['rows']}
+    mapping = {item_key(s['original_product'], s['original_variation']): r for r in catalog['rows'] for s in source_pairs(r)}
     def display(item):
         row = mapping.get(item_key(item.product, item.variation), {})
-        return Item(row.get('alternative_product') or item.product,
-                    row.get('alternative_variation') or item.variation or '—', item.pieces)
+        # The PDF item/fingerprint stays untouched. Only the printed copy changes.
+        return Item((row.get('alternative_product') or item_key(item.product, item.variation)[0]).rstrip(' ').upper(),
+                    (row.get('alternative_variation') or item_key(item.product, item.variation)[1]).rstrip(' ').upper(), item.pieces)
     return [replace(b, orders=[replace(o, items=[display(i) for i in o.items]) for o in b.orders]) for b in batches]
 
 
 def export_excel(path, catalog):
-    # Runtime Excel support is bundled with the offline employee application.
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.comments import Comment
@@ -174,23 +245,27 @@ def export_excel(path, catalog):
         cell.fill = PatternFill('solid', fgColor='F8CBAD')
         cell.font = Font(name='Calibri', bold=True, color='202020')
     ws.row_dimensions[1].height = 32
-    for number, row in enumerate(catalog['rows'], 2):
-        for column, value in enumerate([row[f] for f in FIELDS] + [row['id']], 1):
-            cell = ws.cell(number, column, value)
-            cell.data_type = 's'  # Original listing text must never become a formula.
-            cell.number_format = '@'
-            cell.font = Font(name='Calibri', size=11, bold=column in (3, 4), color='19579D' if column in (3, 4) else '202020')
-            cell.alignment = Alignment(wrap_text=True, vertical='top')
-            cell.fill = PatternFill('solid', fgColor='FFF7E8' if column in (3, 4) else ('F2F5F9' if number % 2 == 0 else 'FFFFFF'))
-        ws.row_dimensions[number].height = 60
-    for column, width in zip('ABCDE', [72, 34, 48, 34, 36]):
+    number = 1
+    for row in validate_rows(catalog['rows']):
+        for source in source_pairs(row):
+            number += 1
+            values = [source[f] for f in FIELDS[:2]] + [row[f] for f in FIELDS[2:]] + [row['id'], json.dumps(list(item_key(source['original_product'], source['original_variation'])), ensure_ascii=False)]
+            for column, value in enumerate(values, 1):
+                cell = ws.cell(number, column, value)
+                cell.data_type = 's'
+                cell.number_format = '@'
+                cell.font = Font(name='Calibri', size=11, bold=column in (3, 4), color='19579D' if column in (3, 4) else '202020')
+                cell.alignment = Alignment(wrap_text=True, vertical='top')
+                cell.fill = PatternFill('solid', fgColor='FFF7E8' if column in (3, 4) else ('F2F5F9' if number % 2 == 0 else 'FFFFFF'))
+            ws.row_dimensions[number].height = 60
+    for column, width in zip('ABCDEF', [72, 34, 48, 34, 36, 36]):
         ws.column_dimensions[column].width = width
-    ws.column_dimensions['E'].hidden = True
+    ws.column_dimensions['E'].hidden = ws.column_dimensions['F'].hidden = True
     ws.freeze_panes = 'A2'
-    ws.auto_filter.ref = f'A1:E{max(1, ws.max_row)}'
-    ws['A1'].comment = Comment('You may edit all four name columns or add rows. Hidden entry IDs let edited original names update the same entry. Missing rows are retained on import; delete entries in Define Name.', 'Packing List Manager')
+    ws.auto_filter.ref = f'A1:D{max(1, ws.max_row)}'
+    ws['A1'].comment = Comment('Each linked original pair has its own Excel row so all originals can be edited. They remain one merged definition in the program. Hidden IDs preserve links when originals change. Missing rows are retained; delete definitions in Define Name. Names become UPPERCASE, trailing spaces are removed, and paragraphs/line breaks are rejected.', 'Packing List Manager')
     for cell in ('C1', 'D1'):
-        ws[cell].comment = Comment('Blank uses the original field. Start with a letter or number. Allowed symbols after the first character: - ( ) / % . + , & apostrophe. Keep this workbook OPEN and click Import in Define Name to save your edits.', 'Packing List Manager')
+        ws[cell].comment = Comment('Blank uses the original field. Start with a letter or number. Changing an alternative on one linked row updates the whole merged definition; conflicting edits are rejected. New matching definitions require confirmation to merge. Keep this workbook OPEN and click Import in Define Name.', 'Packing List Manager')
     temp = path.with_name(path.stem + '.tmp-' + uuid.uuid4().hex + '.xlsx')
     try:
         wb.save(temp)
@@ -200,11 +275,11 @@ def export_excel(path, catalog):
     finally:
         wb.close()
         temp.unlink(missing_ok=True)
-    return {'ok': True, 'path': str(path), 'count': len(catalog['rows'])}
+    return {'ok': True, 'path': str(path), 'count': len(catalog['rows']), 'originals': number - 1}
 
 
 def import_excel(path, current_rows):
-    """Return a validated merge preview. Persistence happens only on Save names."""
+    """Preview only: retain linked IDs and omitted originals; never save partial edits."""
     from openpyxl import load_workbook
     if path.suffix.lower() != '.xlsx':
         raise PackingError('Choose an .xlsx file exported from Define Name.')
@@ -212,9 +287,10 @@ def import_excel(path, current_rows):
         raise PackingError('This workbook is too large. Import only the names worksheet.')
     rows = validate_rows(copy.deepcopy(current_rows))
     by_id = {r['id']: i for i, r in enumerate(rows)}
-    by_key = {item_key(r['original_product'], r['original_variation']): i for i, r in enumerate(rows)}
-    updates, imported_keys, imported_ids, targets = [], set(), set(), set()
-    added = updated = 0
+    by_key = {item_key(s['original_product'], s['original_variation']): i for i, r in enumerate(rows) for s in source_pairs(r)}
+    replacements, alt_edits, additions, targets = {}, {}, [], set()
+    priority = []
+    updated = set()
     try:
         wb = load_workbook(path, read_only=True, data_only=False, keep_links=False)
         try:
@@ -226,7 +302,8 @@ def import_excel(path, current_rows):
             if [ws.cell(1, c).value for c in range(1, 5)] != list(HEADERS[:4]):
                 raise PackingError('Keep the four column headings from a Define Name export.')
             has_ids = ws.cell(1, 5).value == HEADERS[4]
-            for number, cells in enumerate(ws.iter_rows(min_row=2, max_col=5), 2):
+            has_pairs = ws.cell(1, 6).value == HEADERS[5]
+            for number, cells in enumerate(ws.iter_rows(min_row=2, max_col=6), 2):
                 if not any(c.value is not None and c.value != '' for c in cells[:4]):
                     continue
                 values = []
@@ -236,38 +313,46 @@ def import_excel(path, current_rows):
                     if cell.value is not None and not isinstance(cell.value, (str, int, float)):
                         raise PackingError(f'Excel row {number}: format names as text.')
                     values.append('' if cell.value is None else str(cell.value))
-                row = dict(zip(FIELDS, values))
+                row = validate_rows([dict(zip(FIELDS, values))])[0]
                 identifier = str(cells[4].value or '') if has_ids else ''
                 key = item_key(row['original_product'], row['original_variation'])
-                if key in imported_keys or (identifier and identifier in imported_ids):
-                    raise PackingError(f'Excel row {number}: duplicate original pair or entry ID.')
-                imported_keys.add(key)
-                if identifier:
-                    imported_ids.add(identifier)
                 target = by_id.get(identifier) if identifier in by_id else by_key.get(key)
-                if target is not None:
-                    if target in targets:
-                        raise PackingError(f'Excel row {number}: two rows update the same saved item.')
-                    targets.add(target)
-                    row['id'] = rows[target]['id']
-                    updated += 1
+                if target is None:
+                    additions.append(row)
+                    priority.append(row['id'])
+                    continue
+                existing = rows[target]
+                priority.append(existing['id'])
+                old_keys = {item_key(s['original_product'], s['original_variation']) for s in source_pairs(existing)}
+                if has_pairs and cells[5].value and identifier in by_id:
+                    old = json.loads(cells[5].value)
+                    if not isinstance(old, list) or len(old) != 2 or not all(isinstance(v, str) for v in old):
+                        raise PackingError(f'Excel row {number}: invalid original-pair ID. Start with a fresh export.')
+                    old_key = item_key(*old)
                 else:
-                    row['id'] = uuid.uuid4().hex
-                    added += 1
-                try:
-                    row = validate_rows([row])[0]
-                except PackingError as exc:
-                    raise PackingError(f'Excel row {number}: {exc}') from exc
-                updates.append((target, row))
+                    old_key = key if key in old_keys else item_key(existing['original_product'], existing['original_variation'])
+                if old_key not in old_keys or (target, old_key) in targets:
+                    raise PackingError(f'Excel row {number}: two rows update the same original, or its hidden ID is invalid.')
+                targets.add((target, old_key))
+                replacements[(target, old_key)] = {f: row[f] for f in FIELDS[:2]}
+                for field in FIELDS[2:]:
+                    if row[field] != existing[field]:
+                        changes = alt_edits.setdefault((target, field), set())
+                        changes.add(row[field])
+                        if len(changes) > 1:
+                            raise PackingError(f'Excel row {number}: conflicting alternatives for linked originals. Use one alternative value for the merged definition.')
+                updated.add(target)
         finally:
             wb.close()
     except PackingError:
         raise
     except Exception as exc:
         raise PackingError(f'Could not read the names workbook: {exc}') from exc
-    for target, row in updates:
-        if target is None:
-            rows.append(row)
-        else:
-            rows[target] = row
-    return {'ok': True, 'rows': validate_rows(rows), 'added': added, 'updated': updated}
+    for target, row in enumerate(rows):
+        sources = [replacements.get((target, item_key(s['original_product'], s['original_variation'])), s) for s in source_pairs(row)]
+        row.update(sources[0])
+        row['aliases'] = sources[1:]
+        for field in FIELDS[2:]:
+            if (target, field) in alt_edits:
+                row[field] = next(iter(alt_edits[(target, field)]))
+    return {'ok': True, 'rows': validate_rows(rows + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated)}
