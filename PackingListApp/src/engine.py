@@ -17,13 +17,14 @@ import uuid
 
 from docx import Document
 
-from extractors import Batch, Item, Order, PackingError, clean, file_hash, parse_pdf
+from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.6.1'
+VERSION = '1.7.0'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'
+COURIERS = 'Courier_Selections.json'
 
 
 def natural(value):
@@ -331,17 +332,80 @@ def batch_details(batch, old=None):
     return '\r\n'.join(parts)
 
 
+def load_couriers(folder):
+    path = folder / '000 Output' / COURIERS
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if data.get('schema') != 1 or not isinstance(data.get('choices'), dict):
+            raise ValueError('invalid format')
+        for key, value in data['choices'].items():
+            if not isinstance(value, dict) or value.get('carrier') not in ('SPX', 'FLASH') or not re.fullmatch(r'[a-f0-9]{64}', value.get('sha256', '')):
+                raise ValueError('invalid saved courier')
+        return data['choices']
+    except Exception as exc:
+        raise PackingError(f'{COURIERS} cannot be read ({exc}). Restore its backup or correct the courier settings before generating.') from exc
+
+
+def store_courier(out, choices, key, sha256, carrier):
+    if carrier == 'Auto':
+        choices.pop(key, None)
+    else:
+        choices[key] = {'sha256': sha256, 'carrier': carrier}
+    atomic_json(out / COURIERS, {'schema': 1, 'choices': choices})
+
+
+def set_courier(folder, selection, carrier):
+    if carrier not in ('Auto', 'SPX', 'FLASH'):
+        raise PackingError('Choose Auto, SPX or FLASH.')
+    with folder_lock(folder) as out:
+        recover(out)
+        path = safe_child(folder, selection['path'])
+        if path.suffix.lower() != '.pdf' or '000 Output' in path.relative_to(folder).parts:
+            raise PackingError('Select a source packing PDF.')
+        digest = file_hash(path)
+        if digest != selection.get('sha256'):
+            raise PackingError('This PDF changed after the scan. Scan again before choosing its courier.')
+        try:
+            batch = parse_pdf(path, allow_unassigned=True)
+            platform = batch.platform
+        except PackingError as exc:
+            platform = getattr(exc, 'platform', '')
+            if platform not in ('SHOPEE', 'SPX', 'FLASH'):
+                raise
+        if platform not in ('SHOPEE', 'SPX', 'FLASH'):
+            raise PackingError('Courier selection applies only to Shopee packing PDFs.')
+        if file_hash(path) != digest:
+            raise PackingError('The PDF changed while selecting its courier. Scan again.')
+        store_courier(out, load_couriers(folder), relpath(path, folder), digest, carrier)
+    return {'ok': True}
+
+
 def scan_internal(folder):
-    batches, errors = {}, {}
+    batches, errors, modes = {}, {}, {}
+    choices = load_couriers(folder)
     if folder.exists():
         paths = sorted((p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.pdf'
                         and '000 Output' not in p.relative_to(folder).parts), key=natural)
         for path in paths:
             key = relpath(path, folder)
             try:
-                batches[key] = parse_pdf(path)
+                choice = choices.get(key, {})
+                mode = choice.get('carrier') if choice and file_hash(path) == choice['sha256'] else None
+                modes[key] = mode or 'Auto'
+                batches[key] = parse_pdf(path, carrier=mode, allow_unassigned=True)
+            except UnsupportedPdf:
+                continue
             except Exception as exc:
-                errors[key] = str(exc)
+                try:
+                    digest = file_hash(path)
+                except OSError:
+                    digest = ''
+                platform = getattr(exc, 'platform', '')
+                errors[key] = {'path': key, 'platform': platform, 'is_shopee': platform in ('SHOPEE', 'SPX', 'FLASH'),
+                               'courier': modes.get(key, 'Auto'), 'status': 'ERROR', 'message': str(exc),
+                               'details': str(exc), 'orders': 0, 'pieces': 0, 'new_orders': 0, 'sha256': digest, 'outputs': []}
     history = load_history(folder, batches)
     upgrade_output_links(folder, history)
     available = available_order_outputs(folder, history)
@@ -354,8 +418,7 @@ def scan_internal(folder):
     entries = []
     for key in sorted(set(batches) | set(errors), key=natural):
         if key in errors:
-            entries.append({'path': key, 'platform': '', 'status': 'ERROR', 'message': errors[key],
-                            'details': errors[key], 'orders': 0, 'pieces': 0, 'new_orders': 0, 'sha256': '', 'outputs': []})
+            entries.append(errors[key])
             continue
         batch = batches[key]
         source = history['sources'].get(key)
@@ -370,7 +433,9 @@ def scan_internal(folder):
         missing_outputs = [name for name in old_outputs if not safe_child(folder / '000 Output', name).is_file()]
         ignored = bool(source and source.get('ignored_changes') and source.get('sha256') == batch.sha256)
         old_text = None
-        if key in conflicts:
+        if batch.platform == 'SHOPEE':
+            status, message = 'COURIER', 'Choose SPX or FLASH in Courier; Auto found no unique courier label in the filename or folder.'
+        elif key in conflicts:
             status, message = 'ERROR', 'Conflicting versions of the same order are present in this dated folder. Keep the correct PDF and scan again.'
         elif (source and source.get('sha256') != batch.sha256) or (changed_orders and not ignored) or (ignored and changed_orders and missing_outputs):
             status, message = 'REVIEW', 'File or order details changed. Review the previous and current versions before continuing.'
@@ -399,7 +464,8 @@ def scan_internal(folder):
             for o in batch.orders:
                 seen.setdefault(o.key, key)
         links = '\r\n'.join(('MISSING: ' if name in missing_outputs else 'Word output: ') + name for name in old_outputs)
-        entries.append({'path': key, 'platform': batch.platform, 'status': status, 'message': message,
+        entries.append({'path': key, 'platform': batch.platform, 'is_shopee': batch.platform in ('SHOPEE', 'SPX', 'FLASH'),
+                        'courier': modes.get(key, 'Auto'), 'status': status, 'message': message,
                         'details': (links + '\r\n\r\n' if links else '') + batch_details(batch, old_text), 'orders': len(batch.orders),
                         'pieces': batch.pieces, 'new_orders': len(fresh) if status == 'READY' else 0,
                         'missing_orders': len(fresh) if status == 'MISSING' else 0,
@@ -444,6 +510,8 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None):
             entry = entry_map.get(key)
             if not entry or selection.get('sha256') != entry['sha256']:
                 raise PackingError(f'{key} changed after the scan. Scan again before generating.')
+            if selection.get('courier', entry['courier']) != entry['courier'] or selection.get('platform', entry['platform']) != entry['platform']:
+                raise PackingError(f'{key}: courier changed after the scan. Scan again before generating.')
             revision = bool(selection.get('revision'))
             if entry.get('requires_revision') and not revision:
                 raise PackingError(f'{key} needs an explicit revision review.')
@@ -623,8 +691,8 @@ def import_pdfs(folder, paths, carrier=None):
         source = Path(value).resolve()
         try:
             if source.suffix.lower() != '.pdf': raise PackingError('Only PDF files can be added.')
-            batch = parse_pdf(source, carrier)
-            target_folder = folder / ('LAZADA & TIKTOK' if batch.group=='LAZADA_TIKTOK' else batch.group)
+            batch = parse_pdf(source, carrier, allow_unassigned=True)
+            target_folder = folder if batch.platform == 'SHOPEE' else folder / ('LAZADA & TIKTOK' if batch.group=='LAZADA_TIKTOK' else batch.group)
             target_folder.mkdir(exist_ok=True)
             matches = [p for p in target_folder.iterdir() if p.is_file() and p.suffix.lower()=='.pdf' and file_hash(p)==batch.sha256]
             if matches:
@@ -642,6 +710,9 @@ def import_pdfs(folder, paths, carrier=None):
                 os.rename(temp, target)
             finally:
                 if temp.exists(): temp.unlink()
+            if carrier in ('SPX', 'FLASH') and batch.platform in ('SPX', 'FLASH'):
+                with folder_lock(folder) as out:
+                    store_courier(out, load_couriers(folder), relpath(target, folder), batch.sha256, carrier)
             imported.append(str(target))
         except Exception as exc:
             errors.append({'file': source.name, 'message': str(exc)})
@@ -659,6 +730,7 @@ def handle(request):
     if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))
     if action == 'names_import': return import_excel(Path(request['path']), request['rows'])
     folder = dated_folder(request['folder'])
+    if action == 'courier': return set_courier(folder, request['selected'], request['carrier'])
     if action == 'scan': return scan(folder, catalog_path)
     if action == 'generate': return generate(folder, request['selected'], catalog_path=catalog_path)
     if action == 'import': return import_pdfs(folder, request['files'], request.get('carrier'))

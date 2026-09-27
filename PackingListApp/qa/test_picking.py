@@ -69,7 +69,7 @@ class PickingTests(unittest.TestCase):
             with self.assertRaises(PackingError):
                 read_completed_doc(path, 'SPX')
 
-    def test_automatic_import_rejects_unlabelled_shopee(self):
+    def test_automatic_import_accepts_unlabelled_shopee_for_courier_selection(self):
         import shutil
         import engine
         with tempfile.TemporaryDirectory(dir=APP / 'qa') as temp:
@@ -78,8 +78,10 @@ class PickingTests(unittest.TestCase):
             shutil.copyfile(ROOT / '20260926/SPX/20260926_SPX_PL_4.pdf', pdf)
             folder = temp / '20260926'
             result = engine.import_pdfs(folder, [str(pdf)])
-            self.assertEqual(len(result['errors']), 1)
-            self.assertIn('filename or folder path', result['errors'][0]['message'])
+            self.assertFalse(result['errors'])
+            self.assertEqual(len(result['imported']), 1)
+            unassigned = engine.scan(folder)['entries'][0]
+            self.assertEqual((unassigned['platform'], unassigned['courier'], unassigned['status']), ('SHOPEE', 'Auto', 'COURIER'))
             labelled = temp / 'SPX_packing.pdf'
             pdf.rename(labelled)
             result = engine.import_pdfs(folder, [str(labelled)])

@@ -15,3 +15,7 @@
 - The existing Windows program is authorized. Save completed version checkpoints locally in Git, with a verified bundle in Git/vVERSION. Preserve earlier version folders; do not upload without authorization.
 
 - Define Name stores uppercase single-line fields, trims trailing spaces, and matches original pairs without case sensitivity. Confirm before merging rows with equal nonblank alternative product AND variation. Keep the first selected base and every linked original pair; later PDF scans must recognize all links. Excel round trips must preserve and permit editing those linked originals.
+
+- Shopee continuation labels with the same Order ID and consecutive printed item numbers belong to one order. Reject missing, overlapping or duplicate sections instead of silently dropping products.
+- Each Shopee PDF has Auto/SPX/FLASH courier selection. Auto takes the nearest exact SPX or FLASH folder first, then filename/path hints. Explicit per-file selection overrides Auto and persists until reset or PDF contents change. Lazada/TikTok cells show a disabled dash.
+- Scan compatible PDFs anywhere under the selected dated folder except 000 Output. Hide unrecognized/no-readable-text PDFs; keep genuine errors in recognized packing lists visible for review.

@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.6.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.6.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.7.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.7.0.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -38,7 +38,7 @@ namespace PackingListManager {
         readonly string appDir = AppDomain.CurrentDomain.BaseDirectory;
         string rootFolder;
         readonly string settingsPath;
-        bool busy;
+        bool busy, loadingFiles;
         string lastError;
         readonly TextBox folderText = new TextBox();
         readonly DateTimePicker date = new DateTimePicker();
@@ -66,7 +66,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.6.1";
+            Text = "Packing List Manager 1.7";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -89,6 +89,9 @@ namespace PackingListManager {
                     try {
                         SelectFolder(startupArgs[1]);
                         await Scan();
+                        bool courierControlsValid=CheckCourierControls();
+                        bool courierChangesWork=!startupArgs.Contains("--check-couriers")||await CheckCourierChanges();
+                        if(!courierControlsValid||!courierChangesWork)throw new Exception("Courier controls verification failed: controls="+courierControlsValid+", changes="+courierChangesWork+", rows="+grid.Rows.Count+", error="+lastError+", entries="+json.Serialize(entries));
                         int selectable=grid.Rows.Cast<DataGridViewRow>().Count(r=>!r.Cells[0].ReadOnly);
                         int autoSelected=grid.Rows.Cast<DataGridViewRow>().Count(r=>Convert.ToBoolean(r.Cells[0].Value));
                         bool manualSelectionWorks=false;
@@ -132,7 +135,7 @@ namespace PackingListManager {
                                 }
                             }
                         }
-                        File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new { ok=lastError==null, rows=grid.Rows.Count, selectable=selectable, autoSelected=autoSelected, manualSelectionWorks=manualSelectionWorks, selectAllWorks=selectAllWorks, summary=summary.Text, status=status.Text, error=lastError }));
+                        File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new { ok=lastError==null, rows=grid.Rows.Count, selectable=selectable, autoSelected=autoSelected, manualSelectionWorks=manualSelectionWorks, selectAllWorks=selectAllWorks, courierControlsValid=courierControlsValid, courierChangesWork=courierChangesWork, summary=summary.Text, status=status.Text, error=lastError }));
                     } catch(Exception ex) {
                         File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new {ok=false,error=ex.ToString()}));
                     }
@@ -152,7 +155,7 @@ namespace PackingListManager {
         static string S(Dictionary<string,object> d,string key) { return d.ContainsKey(key) && d[key]!=null ? Convert.ToString(d[key],CultureInfo.InvariantCulture) : ""; }
         static int N(Dictionary<string,object> d,string key) { return d.ContainsKey(key) && d[key]!=null ? Convert.ToInt32(d[key]) : 0; }
         static bool B(Dictionary<string,object> d,string key) { return d.ContainsKey(key) && d[key]!=null && Convert.ToBoolean(d[key]); }
-        bool CanSelectFile(Dictionary<string,object> en) { return en!=null && S(en,"status")!="ERROR" && (!B(en,"requires_revision") || revisions.Contains(S(en,"path"))); }
+        bool CanSelectFile(Dictionary<string,object> en) { return en!=null && S(en,"status")!="ERROR" && S(en,"status")!="COURIER" && (!B(en,"requires_revision") || revisions.Contains(S(en,"path"))); }
         static List<Dictionary<string,object>> Rows(object value) {
             var result=new List<Dictionary<string,object>>();
             if (value is IEnumerable) foreach(var v in (IEnumerable)value) if(v is Dictionary<string,object>) result.Add((Dictionary<string,object>)v);
@@ -221,8 +224,14 @@ namespace PackingListManager {
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="orders",HeaderText="Orders",FillWeight=48,ReadOnly=true});
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="pieces",HeaderText="Pieces",FillWeight=48,ReadOnly=true});
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="status",HeaderText="Status",FillWeight=180,ReadOnly=true});
+            var courierColumn=new DataGridViewComboBoxColumn {Name="courier",HeaderText="Courier",FillWeight=76,MinimumWidth=88,FlatStyle=FlatStyle.Flat,DisplayStyle=DataGridViewComboBoxDisplayStyle.DropDownButton};
+            courierColumn.Items.AddRange("Auto","SPX","FLASH");grid.Columns.Add(courierColumn);courierColumn.DisplayIndex=3;
             grid.Columns[0].AutoSizeMode=DataGridViewAutoSizeColumnMode.None;grid.Columns[0].Width=70;
-            grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;
+            grid.Columns["platform"].Width=95;grid.Columns["courier"].Width=100;
+            grid.Columns["orders"].Width=65;grid.Columns["pieces"].Width=65;
+            grid.Columns["file"].AutoSizeMode=DataGridViewAutoSizeColumnMode.Fill;
+            grid.Columns["status"].AutoSizeMode=DataGridViewAutoSizeColumnMode.Fill;
+            grid.Columns["file"].FillWeight=55;grid.Columns["status"].FillWeight=45;
             selectAllUse.Text="Use";selectAllUse.AutoSize=true;selectAllUse.AutoCheck=false;selectAllUse.ThreeState=true;
             selectAllUse.Font=new Font("Segoe UI",9F,FontStyle.Bold);selectAllUse.BackColor=grid.ColumnHeadersDefaultCellStyle.BackColor;
             selectAllUse.AccessibleName="Select all compatible PDFs";selectAllUse.Cursor=Cursors.Hand;
@@ -231,8 +240,13 @@ namespace PackingListManager {
             grid.Scroll+=(s,e)=>PositionUseHeader();grid.ColumnHeadersHeightChanged+=(s,e)=>PositionUseHeader();
             grid.SelectionChanged+=(s,e)=>ShowSelected();
             grid.CurrentCellDirtyStateChanged+=(s,e)=>{if(grid.IsCurrentCellDirty)grid.CommitEdit(DataGridViewDataErrorContexts.Commit);};
-            grid.CellValueChanged+=(s,e)=>RefreshSelection();
-            grid.CellBeginEdit+=(s,e)=>{if(e.ColumnIndex==0){var en=(Dictionary<string,object>)grid.Rows[e.RowIndex].Tag;if(!CanSelectFile(en))e.Cancel=true;}};
+            grid.CellValueChanged+=async(s,e)=>{
+                if(loadingFiles)return;
+                if(e.RowIndex>=0&&e.ColumnIndex==grid.Columns["courier"].Index)await ChangeCourier(grid.Rows[e.RowIndex]);
+                else RefreshSelection();
+            };
+            grid.DataError+=(s,e)=>{e.ThrowException=false;};
+            grid.CellBeginEdit+=(s,e)=>{if(e.ColumnIndex==0){var en=(Dictionary<string,object>)grid.Rows[e.RowIndex].Tag;if(!CanSelectFile(en))e.Cancel=true;}else if(e.ColumnIndex==grid.Columns["courier"].Index&&!B((Dictionary<string,object>)grid.Rows[e.RowIndex].Tag,"is_shopee"))e.Cancel=true;};
             layout.Controls.Add(grid,0,4);
 
             var secondary=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false,Padding=new Padding(0,5,0,0)};
@@ -253,6 +267,28 @@ namespace PackingListManager {
             progress.Dock=DockStyle.Fill;progress.Style=ProgressBarStyle.Marquee;progress.Visible=false;progress.MarqueeAnimationSpeed=24;footer.Controls.Add(progress,1,0);layout.Controls.Add(footer,0,7);
         }
 
+        bool CheckCourierControls() {
+            return grid.Rows.Cast<DataGridViewRow>().All(row=>{
+                var entry=row.Tag as Dictionary<string,object>;var cell=row.Cells["courier"];
+                return B(entry,"is_shopee")?cell is DataGridViewComboBoxCell&&!cell.ReadOnly&&Convert.ToString(cell.Value)==S(entry,"courier"):
+                    cell is DataGridViewTextBoxCell&&cell.ReadOnly;
+            });
+        }
+        async Task<bool> CheckCourierChanges() {
+            var source=entries.FirstOrDefault(e=>S(e,"status")=="COURIER");
+            if(source==null)return false;
+            string path=S(source,"path");
+            foreach(string mode in new[]{"FLASH","SPX","Auto"}) {
+                var row=grid.Rows.Cast<DataGridViewRow>().First(r=>S((Dictionary<string,object>)r.Tag,"path")==path);
+                loadingFiles=true;row.Cells["courier"].Value=mode;loadingFiles=false;
+                await ChangeCourier(row);
+                var changed=entries.First(e=>S(e,"path")==path);
+                if(S(changed,"courier")!=mode||S(changed,"platform")!=(mode=="Auto"?"SHOPEE":mode))return false;
+                await Scan(true);
+                if(S(entries.First(e=>S(e,"path")==path),"courier")!=mode||!CheckCourierControls())return false;
+            }
+            return true;
+        }
         void PositionUseHeader() {
             if(grid.Columns.Count==0)return;
             var bounds=grid.GetCellDisplayRectangle(0,-1,true);
@@ -283,7 +319,7 @@ namespace PackingListManager {
             try {
                 selectingAll=true;
                 foreach(string state in new[]{"ERROR","REVIEW"}) {
-                    int i=grid.Rows.Add(false,"","QA excluded PDF",0,0,state);
+                    int i=grid.Rows.Add(false,"","QA excluded PDF",0,0,state,null);
                     var row=grid.Rows[i];added.Add(row);
                     row.Tag=new Dictionary<string,object>{{"status",state},{"requires_revision",state=="REVIEW"},{"path","QA "+state}};
                     row.Cells[0].ReadOnly=true;
@@ -355,24 +391,42 @@ namespace PackingListManager {
             } finally {Busy(false,"Ready");try{Directory.Delete(work,true);}catch{}}
         }
 
-        public async Task Scan() {
+        public async Task Scan(bool preserveSelections=false) {
             if(busy)return;
+            string selectedPath=Selected()==null?"":S(Selected(),"path");
+            var previous=new Dictionary<string,bool>();
+            if(preserveSelections)foreach(DataGridViewRow row in grid.Rows)if(CanSelectFile(row.Tag as Dictionary<string,object>))previous[S((Dictionary<string,object>)row.Tag,"path")]=Convert.ToBoolean(row.Cells[0].Value);
             try {
                 var result=await Call(new Dictionary<string,object>{{"action","scan"}},"Reading PDFs and checking completed batches...");
-                entries=Rows(result["entries"]);outputs=Rows(result["outputs"]);revisions.Clear();grid.Rows.Clear();
+                entries=Rows(result["entries"]);outputs=Rows(result["outputs"]);revisions.Clear();loadingFiles=true;grid.Rows.Clear();
                 foreach(var entry in entries) {
                     string state=S(entry,"status"),label=S(entry,"message");
-                    int i=grid.Rows.Add(state=="READY"||state=="MISSING",S(entry,"platform"),S(entry,"path"),N(entry,"orders"),N(entry,"pieces"),label);
+                    int i=grid.Rows.Add(state=="READY"||state=="MISSING",S(entry,"platform"),S(entry,"path"),N(entry,"orders"),N(entry,"pieces"),label,B(entry,"is_shopee")?S(entry,"courier"):null);
                     var row=grid.Rows[i];row.Tag=entry;row.Cells[0].ReadOnly=!CanSelectFile(entry);
+                    if(B(entry,"is_shopee"))row.Cells["courier"].ToolTipText="Auto uses the nearest SPX/FLASH folder first, then the filename. Choose SPX or FLASH to override.";
+                    else {row.Cells["courier"]=new DataGridViewTextBoxCell {Value="—",Style=new DataGridViewCellStyle {ForeColor=Color.Gray,BackColor=Color.FromArgb(242,244,247)}};row.Cells["courier"].ReadOnly=true;}
+                    if(previous.ContainsKey(S(entry,"path"))&&CanSelectFile(entry))row.Cells[0].Value=previous[S(entry,"path")];
                     row.Cells[5].ToolTipText=label;
-                    row.Cells[5].Style.ForeColor=state=="READY"||state=="MISSING"?Color.FromArgb(20,112,67):(state=="REVIEW"||state=="ERROR"?Color.FromArgb(166,77,10):Color.FromArgb(95,106,119));
+                    row.Cells[5].Style.ForeColor=state=="READY"||state=="MISSING"?Color.FromArgb(20,112,67):(state=="REVIEW"||state=="ERROR"||state=="COURIER"?Color.FromArgb(166,77,10):Color.FromArgb(95,106,119));
                 }
-                int fresh=entries.Sum(e=>N(e,"new_orders")),issues=entries.Count(e=>S(e,"status")=="REVIEW"||S(e,"status")=="ERROR");
+                loadingFiles=false;
+                if(preserveSelections)foreach(DataGridViewRow row in grid.Rows)if(S((Dictionary<string,object>)row.Tag,"path")==selectedPath){grid.CurrentCell=row.Cells["file"];break;}
+                int fresh=entries.Sum(e=>N(e,"new_orders")),issues=entries.Count(e=>S(e,"status")=="REVIEW"||S(e,"status")=="ERROR"||S(e,"status")=="COURIER");
                 int missing=entries.Sum(e=>N(e,"missing_orders"));
                 summary.Text="2  Review files — "+fresh+" new orders"+(missing>0?"  |  "+missing+" orders missing Word output":"")+(issues>0?"  |  "+issues+" file(s) need attention":"");
-                status.Text=entries.Count==0?"No PDFs for this date. Choose a dated folder or use Add PDFs.":"Tick Use for any PDF to generate again. New files and files missing output are selected automatically.";
+                status.Text=entries.Count==0?"No readable, supported packing PDFs for this date. Choose a dated folder or use Add PDFs.":"Tick Use for any PDF to generate again. New files and files missing output are selected automatically.";
                 ShowSelected();RefreshSelection();
-            } catch(Exception ex){ShowError(ex);grid.Rows.Clear();entries.Clear();outputs.Clear();RefreshSelection();}
+            } catch(Exception ex){loadingFiles=false;ShowError(ex);grid.Rows.Clear();entries.Clear();outputs.Clear();RefreshSelection();}
+        }
+        async Task ChangeCourier(DataGridViewRow row) {
+            var entry=row.Tag as Dictionary<string,object>;
+            if(busy||entry==null||!B(entry,"is_shopee"))return;
+            string mode=Convert.ToString(row.Cells["courier"].Value);
+            if(mode==S(entry,"courier"))return;
+            try {
+                await Call(new Dictionary<string,object>{{"action","courier"},{"carrier",mode},{"selected",new Dictionary<string,object>{{"path",S(entry,"path")},{"sha256",S(entry,"sha256")}}}},"Saving courier selection...");
+                await Scan(true);
+            } catch(Exception ex){loadingFiles=true;row.Cells["courier"].Value=S(entry,"courier");loadingFiles=false;ShowError(ex);}
         }
         Dictionary<string,object> Selected() {return grid.CurrentRow==null?null:grid.CurrentRow.Tag as Dictionary<string,object>;}
         void ShowSelected() {
@@ -431,7 +485,7 @@ namespace PackingListManager {
             var selected=new List<Dictionary<string,object>>();
             foreach(DataGridViewRow row in grid.Rows)if(Convert.ToBoolean(row.Cells[0].Value)) {
                 var en=(Dictionary<string,object>)row.Tag;
-                selected.Add(new Dictionary<string,object>{{"path",S(en,"path")},{"sha256",S(en,"sha256")},{"revision",revisions.Contains(S(en,"path"))}});
+                selected.Add(new Dictionary<string,object>{{"path",S(en,"path")},{"sha256",S(en,"sha256")},{"revision",revisions.Contains(S(en,"path"))},{"courier",S(en,"courier")},{"platform",S(en,"platform")}});
             }
             if(selected.Count==0)return;
             try {

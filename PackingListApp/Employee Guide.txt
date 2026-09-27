@@ -1,5 +1,5 @@
 PACKING LIST MANAGER
-Employee guide - version 1.6.1
+Employee guide - version 1.7.0
 Help updated September 27, 2026
 
 Start
@@ -10,8 +10,6 @@ the packing document layout. Python and ChatGPT are not needed to use it.
 Folder format
 Use one main folder, with a separate dated folder for each processing day.
 The main folder can be called Packing Files, My Orders, or another name.
-For easy courier recognition, keep SPX and FLASH out of the main folder's
-name; use them for the separate courier folders shown below.
 
 The dated folder must use YYYYMMDD: exactly eight digits, with a valid year,
 month and day. For example, September 27, 2026 is 20260927.
@@ -39,9 +37,9 @@ Packing Files\
       Processing_History.json
 
 The program creates 000 Output and its completed documents/history as needed.
-Place source PDFs in the platform folders, outside 000 Output. The scanner
-reads PDFs inside the selected dated folder and its subfolders, and skips
-everything inside 000 Output.
+Source PDFs can go directly in the dated folder or in ANY of its subfolders,
+including SPX, FLASH, TIKTOK, LAZADA or other folder names. The scanner reads
+compatible PDFs throughout that dated folder and skips everything in 000 Output.
 
 Choose folder and Select date
 - Choose the main folder (Packing Files), then select the processing date.
@@ -70,29 +68,40 @@ The platform is recognized using the PDF layout and the courier rules below.
 Renaming a screenshot, image, Word document or waybill to .pdf does not make
 it a supported packing list.
 
-How the program recognizes each platform
-- Shopee SPX: use a folder named SPX, or include SPX as a separate label in
-  the filename, such as 20260927_SPX_PL_1.pdf.
-- Shopee FLASH: use a folder named FLASH, or include FLASH as a separate
-  label in the filename, such as 20260927_FLASH_PL_1.pdf.
-- A Shopee file named PICK AND PACKING LIST 8AM.pdf works when it is inside
-  the correct SPX or FLASH folder. Uppercase/lowercase does not matter for
-  those courier labels.
-- Keep the courier label separate: SPX or SPX_Orders works; SPXOrders does
-  not provide the separate SPX label the app looks for.
-- Avoid placing both SPX and FLASH in the same file's folder path/name.
-  For example, do not put FLASH files under a parent folder called SPX.
-- Lazada and TikTok are recognized from the text and layout inside their
-  PDFs. Their filenames are for organization; the recommended shared folder
-  is LAZADA & TIKTOK.
+How the program recognizes each platform and courier
+The PDF contents identify Shopee, Lazada or TikTok. Folder names do not turn
+an unrelated PDF into a packing list.
+
+Shopee rows have a Courier dropdown: Auto, SPX or FLASH. Auto is the default.
+- Auto first uses the nearest enclosing folder named exactly SPX or FLASH.
+  Folder names are case insensitive. SPX/PACKING LIST 1.pdf becomes SPX;
+  FLASH/PACKING LIST 1.pdf becomes FLASH. A folder wins over the filename:
+  FLASH/SPX_orders.pdf still becomes FLASH with Auto selected.
+- Without an exact courier folder, Auto looks for one separate SPX or FLASH
+  label in the filename, then an unambiguous label in the remaining path.
+  SPX_Orders.pdf works; SPXOrders.pdf does not provide a separate label.
+- The Platform column shows the courier Auto selected. The Courier dropdown
+  continues to display Auto so it follows the folder automatically.
+- A generic Shopee PDF outside these folders still appears, with its order
+  and piece counts. If Auto cannot identify a courier, choose SPX or FLASH
+  in that row before ticking Use and generating.
+- Choosing SPX or FLASH manually overrides the folder/filename for that PDF.
+  Choose Auto again to restore automatic folder recognition.
+- Manual choices survive rescanning and restarting the app. Replacing the
+  PDF contents resets its choice to Auto, so check the courier again.
+
+Lazada and TikTok are recognized from the PDF contents anywhere in the dated
+folder. Their Courier cells show a disabled dash. They share a blue output.
+Unreadable, scanned/image-only, corrupt and unrecognized PDFs are hidden
+from the selection list. Recognized packing lists with invalid or incomplete
+order data stay visible with an error for review.
 
 Adding PDFs from Downloads or another folder
 Click Add PDFs to copy files into the selected dated folder automatically.
-Shopee files are recognized automatically from SPX or FLASH in their source
-folder path or filename. If a generic Shopee PDF is in Downloads, rename it
-with the correct courier label (for example 20260927_SPX_PL_1.pdf), or move it
-into the correct SPX or FLASH folder before adding it. A path must identify
-only one courier. Lazada and TikTok are recognized from their PDF contents.
+Identified Shopee files go into SPX or FLASH. Generic Shopee PDFs with no
+courier clue go directly into the dated folder: choose the courier in their
+row after adding. Renaming is optional. Lazada and TikTok are recognized by
+contents and copied into their shared platform folder. Originals stay in place.
 
 Checking a different folder
 1. Keep the same YYYYMMDD structure inside the new main folder.
@@ -101,7 +110,8 @@ Checking a different folder
    If no files appear, check the dated folder name and source PDF location.
    If a row needs attention, read its message before generating.
 When moving previously processed work, copy the entire dated folder,
-including 000 Output, its completed Word documents and both history files.
+including 000 Output, its completed Word documents, both history files, and
+Courier_Selections.json if present (the saved manual courier choices).
 Older batches made before this app may have only Processed_Files.txt; keep
 that log and their Word documents. The app verifies that earlier history.
 Copying only PDFs into a fresh dated folder can make them appear unprocessed.
@@ -109,16 +119,16 @@ Copying only PDFs into a fresh dated folder can make them appear unprocessed.
 Daily steps
 1. Click Choose folder and select your main packing folder, or the dated
    folder (for example 20260926). Check the date shown on screen.
-2. Save downloaded PDFs in the SPX, FLASH, and LAZADA & TIKTOK folders.
-   Alternatively click Add PDFs. The program copies them into the chosen
-   dated folder and leaves the originals in place. Shopee files must have
-   SPX or FLASH in their filename or source folder path.
+2. Save downloaded PDFs anywhere inside the selected dated folder, or click
+   Add PDFs. SPX and FLASH subfolders let Auto select the correct courier.
+   For a generic Shopee file elsewhere, choose its Courier in the table.
 3. Click Scan for new PDFs. New files and files missing their Word output
    are selected automatically. Processed files stay selectable: tick Use
    to generate them again. Click the checkbox in the Use column header to
    select all compatible PDFs, including processed ones. Click it again to
    clear all selections. A partial check means some eligible rows are selected.
-   Files with errors or awaiting changed-file review are excluded until resolved.
+   Files with errors, no identified courier, or awaiting changed-file review
+   are excluded until resolved. Check the Platform and Courier columns.
    To view a file's contents, select its row and click Open selected PDF.
 4. Click Generate Packing Lists. Wait until the completion window appears.
    Microsoft Word checks that each entire order fits on one A4 page.
@@ -134,7 +144,7 @@ What is generated
 - Output suffixes are assigned by the program independently of the numbers
   in source PDF filenames. Keep the generated output and history filenames.
 - The source PDF batches stay grouped. Each order has one bordered table,
-  Number and Time writing lines, product check boxes, variation and pieces.
+  Employee, Number and Time writing lines, product check boxes, variation and pieces.
 
 Product picking summary
 Every generated document ends with a Product Picking Summary on a new page.
@@ -228,16 +238,21 @@ the supervisor before those PDFs can be processed.
 
 If a file needs attention
 Read the Status column; hover over a shortened message to see it in full.
-The app stops on unreadable quantities,
-unfamiliar layouts, scanned PDFs, duplicate labels inside one PDF, and
-multi-package or continued-page labels. Download the original packing list
-or ask the supervisor to review it. It does not guess missing information.
+Shopee continuation labels with the same Order ID are joined into one order
+when their printed item numbers continue in sequence. For example, items 1-9
+followed by items 10-11 become one 11-line order and one picking-summary total.
+Missing or overlapping item numbers, duplicate complete labels, unreadable
+quantities and multi-package labels still need review. Download the original
+packing list or ask the supervisor to review it. Missing data is not guessed.
+If an expected PDF is absent, confirm it is an original supported packing list
+with selectable/readable text, rather than a waybill or a scanned image.
 If an order cannot fit on one A4 page, no completed batch is recorded.
 If Word needs setup or shows a dialog, finish that in Word and try again.
 
 Files to keep
 Keep source PDFs, completed Word documents, Processed_Files.txt and
-Processing_History.json together. Back up the whole dated folder.
+Processing_History.json together. Keep Courier_Selections.json too when present.
+Back up the whole dated folder.
 The text log is readable. The JSON file stores exact fingerprints and order
 history for the program. Do not manually edit or delete either history file.
 A .packing-transaction.json file means a batch commit was interrupted; the

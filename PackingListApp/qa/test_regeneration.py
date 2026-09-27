@@ -30,7 +30,7 @@ class RegenerationTests(unittest.TestCase):
         self.parser.stop()
         self.temp.cleanup()
 
-    def parse(self, path):
+    def parse(self, path, carrier=None, allow_unassigned=False):
         return Batch(str(path), 'SPX', file_hash(path), self.items[Path(path).name])
 
     def source(self, name, ids, quantity=2):

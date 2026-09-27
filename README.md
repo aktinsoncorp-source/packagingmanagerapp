@@ -2,7 +2,7 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.6.1**.
+Current engine version: **1.7.0**.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -64,7 +64,7 @@ The 16 synthetic regeneration tests require no production PDFs or Microsoft Word
 & .\.venv\Scripts\python.exe -m unittest discover -s .\PackingListApp\qa -p test_regeneration.py -v
 ```
 
-The full suite contains 66 tests. Several tests and development
+The full suite contains 80 tests. Several tests and development
 helpers require the private September 24-26 source PDFs and approved Word files
 at their original dated paths. Those fixtures and generated QA reports are not
 distributed in Git. Restore them separately before running the full suite.
@@ -76,7 +76,7 @@ A Git bundle is a portable copy of committed repository history. To restore a
 provided bundle into a new folder:
 
 ```powershell
-git clone "Git/v1.6.1/PackingListManager-1.6.1.bundle" "PackingListManager-Restored"
+git clone "Git/v1.7.0/PackingListManager-1.7.0.bundle" "PackingListManager-Restored"
 ```
 
 This restores the tracked program files. It does not restore the installed
@@ -109,3 +109,12 @@ Employee:__________________, Number and Time. This applies to SPX, FLASH, Lazada
 and TikTok, retaining the orange/blue themes and A4 layout. Regenerate an older
 batch to include the field in a new numbered document. Source data is unchanged.
 Local source checkpoint: `Git/v1.6.1`.
+
+## Version 1.7 - continued orders and per-PDF couriers
+
+Shopee order fragments with matching IDs and consecutive item numbers are joined.
+Each Shopee PDF has Auto/SPX/FLASH choices. Auto uses the nearest exact SPX or FLASH
+folder first, before filename hints. Manual choices persist with the PDF fingerprint.
+Compatible PDFs are recognized throughout the dated folder. Unknown/unreadable PDFs
+are hidden; genuine errors in recognized packing lists remain visible for review.
+Lazada/TikTok courier cells show a disabled dash. Local checkpoint: `Git/v1.7.0`.

@@ -17,7 +17,7 @@ This directory contains development files, sanitized document templates, build d
 - `src/assets/orange.docx` and `blue.docx`: sanitized templates distilled from the approved documents.
 - `Employee Guide.txt`: employee instructions, also distributed with the application.
 
-The courier dropdown has been removed. Add PDFs automatically recognizes Shopee SPX/FLASH from the source filename or folder path; an ambiguous path asks the employee to label or move the PDF. Existing saved courier settings are ignored. Lazada/TikTok detection still uses PDF contents.
+Version 1.7 adds an individual Auto/SPX/FLASH courier cell for each Shopee PDF. Auto prioritizes the nearest exact SPX/FLASH folder, then a single filename label, then unambiguous remaining path labels. Explicit choices override Auto and persist per source path/hash in `000 Output/Courier_Selections.json`; changed contents revert to Auto. Lazada/TikTok courier cells are read-only dashes. Content recognition includes PDFs anywhere in the dated folder, excluding `000 Output`. Unassigned Shopee PDFs retain real counts and need a courier choice before generation. Add PDFs accepts them into the dated folder root.
 
 The Use header contains a select-all checkbox. Clicking it selects every compatible PDF (including processed/repeated files), and clicking again clears all selections. Error rows and unresolved changed-file reviews are excluded. A partial selection displays an indeterminate check. The header stays aligned when scrolling or resizing. `--self-test` checks all/none/partial selection with error and review fixtures.
 
@@ -67,7 +67,7 @@ The smoke test requires a fresh `qa/packaged-smoke` directory to avoid overwriti
 
 ## Current scope
 
-Duplicate history is per dated folder. Scanned PDFs, unknown layouts, repeated order labels inside one PDF, multipackage Shopee labels and continued order pages stop for review. A platform layout change may require updating the corresponding parser.
+Duplicate history is per dated folder. Scanned, unknown, corrupt and textless PDFs are omitted. Recognized packing lists with invalid data remain error rows. Shopee continuation fragments are joined only with matching Order IDs and consecutive printed item numbers; missing, overlapping, duplicated or orphan fragments and multipackage labels stop for review. A platform layout change may require updating the corresponding parser.
 
 The employee workflow is one operator on one Windows computer. Processing history belongs with its dated source and output folder. The app reads the earlier human processing log and verifies it against completed documents when importing pre-app history; missing app-era JSON history is an error.
 
@@ -125,3 +125,12 @@ The builder verifies each full header when reopening the created document.
 four platforms, verifies quantities and history parsing, runs real Word pagination,
 and checks in exported PDFs that every header field stays on one line without overlap.
 Existing completed files are preserved; regenerating produces the updated layout.
+
+## Version 1.7 verification
+
+`qa/test_couriers_continuations.py` covers continuation numbering, folder priority,
+courier persistence/reset, source changes, hidden unsupported PDFs and generation.
+The full suite has 80 tests. `qa/couriers_smoke.py <release-directory> <source-pdf>`
+checks the real Windows dropdown, read-only platform cells, packaged generation,
+Word pagination and the reported 127-order/300-piece continuation fixture using
+isolated copies. That private PDF is not distributed in Git. Run with PYTHONUTF8=1.

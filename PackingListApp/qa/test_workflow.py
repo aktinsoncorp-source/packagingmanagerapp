@@ -164,13 +164,12 @@ class PackingTests(unittest.TestCase):
         self.assertEqual(len(r['skipped']),1)
         self.assertFalse(r['imported'])
 
-    def test_unsupported_pdf_is_reported_without_partial_output(self):
+    def test_unsupported_pdf_is_hidden_without_partial_output(self):
         folder=self.folder/'SPX';folder.mkdir()
         writer=PdfWriter();writer.add_blank_page(width=595,height=842)
         with (folder/'blank.pdf').open('wb') as f:writer.write(f)
         entries=self.entries()
-        self.assertEqual(entries[0]['status'],'ERROR')
-        self.assertIn('no readable text',entries[0]['message'])
+        self.assertEqual(entries,[])
 
     def test_missing_app_history_is_not_silently_recreated(self):
         self.copy_source('20260926_SPX_PL_1.pdf')
@@ -178,10 +177,12 @@ class PackingTests(unittest.TestCase):
         (self.folder/'000 Output'/engine.HISTORY).unlink()
         with self.assertRaisesRegex(PackingError,'Restore'):self.entries()
 
-    def test_courier_selection_cannot_override_conflicting_filename(self):
+    def test_explicit_courier_selection_overrides_filename(self):
         r=engine.import_pdfs(self.folder,[str(ROOT/'20260926/FLASH/20260926_Flash_PL_1.pdf')],carrier='SPX')
-        self.assertFalse(r['imported'])
-        self.assertIn('labelled FLASH',r['errors'][0]['message'])
+        self.assertEqual(len(r['imported']),1)
+        self.assertFalse(r['errors'])
+        self.assertEqual(self.entries()[0]['platform'],'SPX')
+        self.assertEqual(self.entries()[0]['courier'],'SPX')
 
     def test_revision_tracks_orders_removed_from_source(self):
         path=self.copy_source('20260926_SPX_PL_1.pdf')

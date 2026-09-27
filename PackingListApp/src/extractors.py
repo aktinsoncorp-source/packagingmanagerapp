@@ -17,6 +17,11 @@ class PackingError(Exception):
     pass
 
 
+class UnsupportedPdf(PackingError):
+    """No supported readable packing-list layout; omit from the employee grid."""
+    pass
+
+
 def clean(value: str | None) -> str:
     return re.sub(r"\s+", " ", value or "").strip()
 
@@ -97,6 +102,13 @@ def positive_integer(value, context):
     return int(value)
 
 
+@dataclass
+class ShopeePart:
+    order: Order
+    first_item: int
+    last_item: int
+
+
 def shopee_page(page, platform, page_num):
     if abs(page.width - 595) > 8 or abs(page.height - 842) > 8:
         raise PackingError(f'Page {page_num}: unsupported Shopee page size. Download the four-per-page packing list.')
@@ -111,10 +123,10 @@ def shopee_page(page, platform, page_num):
                 if clean(txt):
                     raise PackingError(f'Page {page_num}: a Shopee label has text but no readable Order ID.')
                 continue
-            if len(ids) != 2 or ids[0] != ids[1]:
+            if len(ids) not in (1, 2) or len(set(ids)) != 1:
                 raise PackingError(f'Page {page_num}: incomplete or unfamiliar Shopee order label. Review {ids[0]}.')
             packages = re.findall(r'package\s+(\d+)', txt, flags=re.I)
-            if packages != ['1', '1']:
+            if packages != ['1'] * len(ids):
                 raise PackingError(f'Order {ids[0]}: multiple packages need review before packing.')
             words = p.extract_words(x_tolerance=1, y_tolerance=2)
             hashes = [w for w in words if w['text'] == '#']
@@ -136,8 +148,11 @@ def shopee_page(page, platform, page_num):
                       and abs(w['x0'] - hashes[0]['x0']) < 2
                       and header_y + 10 < w['top'] < end_y]
             starts.sort(key=lambda w: w['top'])
-            if [int(w['text']) for w in starts] != list(range(1, len(starts) + 1)) or not starts:
+            numbers = [int(w['text']) for w in starts]
+            if not numbers or numbers[0] < 1 or numbers != list(range(numbers[0], numbers[0] + len(numbers))):
                 raise PackingError(f'Order {ids[0]}: missing or out-of-order product rows.')
+            if numbers[0] == 1 and len(ids) != 2:
+                raise PackingError(f'Order {ids[0]}: the first product section is missing its order heading.')
             items = []
             for index, start in enumerate(starts):
                 y1 = start['top'] - .5
@@ -148,7 +163,7 @@ def shopee_page(page, platform, page_num):
                 if not product:
                     raise PackingError(f'Order {ids[0]}: a product name is blank.')
                 items.append(Item(product, variation, qty))
-            orders.append(Order(platform, ids[0], items))
+            orders.append(ShopeePart(Order(platform, ids[0], items), numbers[0], numbers[-1]))
     return orders
 
 
@@ -218,46 +233,86 @@ def tiktok_page(page, page_num):
     return order
 
 
-def parse_pdf(path: str | Path, carrier: str | None = None) -> Batch:
+def combine_shopee_parts(parts):
+    combined, last_items = OrderedDict(), {}
+    for part in parts:
+        order = part.order
+        if order.key not in combined:
+            if part.first_item != 1:
+                raise PackingError(f'Order {order.order_id}: continuation starts at item {part.first_item}, but its first section is missing.')
+            combined[order.key] = Order(order.platform, order.order_id, list(order.items))
+        else:
+            expected = last_items[order.key] + 1
+            if part.first_item != expected:
+                raise PackingError(f'Order {order.order_id}: repeated or incomplete product section; expected item {expected}, found {part.first_item}.')
+            combined[order.key].items.extend(order.items)
+        last_items[order.key] = part.last_item
+    return list(combined.values())
+
+
+def auto_courier(path):
+    # The nearest classified folder is authoritative in Auto, even if the
+    # filename still contains an older courier label.
+    for parent in path.parents:
+        if parent.name.upper() in ('SPX', 'FLASH'):
+            return parent.name.upper()
+    hints = set(re.findall(r'(?<![A-Z])(SPX|FLASH)(?![A-Z])', path.name.upper()))
+    if len(hints) == 1:
+        return next(iter(hints))
+    hints = set(re.findall(r'(?<![A-Z])(SPX|FLASH)(?![A-Z])', str(path.parent).upper()))
+    return next(iter(hints)) if len(hints) == 1 else None
+
+
+def parse_pdf(path: str | Path, carrier: str | None = None, allow_unassigned=False) -> Batch:
     path = Path(path).resolve()
-    before = file_hash(path)
     orders = []
+    platform = None
     try:
+        before = file_hash(path)
         with pdfplumber.open(path) as pdf:
             if not pdf.pages:
-                raise PackingError('The PDF is empty.')
+                raise UnsupportedPdf('The PDF is empty.')
             first = pdf.pages[0].extract_text() or ''
             if not clean(first):
-                raise PackingError('This PDF is scanned or has no readable text. Download the original packing-list PDF.')
+                raise UnsupportedPdf('This PDF is scanned or has no readable text. Download the original packing-list PDF.')
             if 'Lazada Seller Center' in first:
                 platform = 'LAZADA'
             elif 'Seller SKU' in first and 'Qty Total' in first:
                 platform = 'TIKTOK'
             elif 'Parent Product Name' in first and 'Order ID' in first:
-                hints = set(re.findall(r'(?<![A-Z])(SPX|FLASH)(?![A-Z])', str(path).upper()))
+                platform = 'SHOPEE'
+                detected = auto_courier(path)
                 if carrier in ('SPX', 'FLASH'):
-                    if len(hints) == 1 and carrier not in hints:
-                        raise PackingError(f'This file or folder is labelled {next(iter(hints))}, but {carrier} was selected. Choose the correct courier or Detect automatically.')
                     platform = carrier
-                elif len(hints) == 1:
-                    platform = hints.pop()
-                else:
-                    raise PackingError('Use SPX or FLASH as a separate label in this Shopee PDF filename or folder path. Keep only one courier label in its path, then add or scan it again.')
+                elif detected:
+                    platform = detected
+                elif not allow_unassigned:
+                    raise PackingError('Choose SPX or FLASH for this Shopee PDF, or include one courier label in its filename or folder path for Auto.')
             else:
-                raise PackingError('PDF layout not recognized. Use an original Shopee, Lazada or TikTok packing list.')
+                raise UnsupportedPdf('PDF layout not recognized. Use an original Shopee, Lazada or TikTok packing list.')
             for n, page in enumerate(pdf.pages, 1):
-                if platform in ('SPX', 'FLASH'):
+                if platform in ('SPX', 'FLASH', 'SHOPEE'):
                     orders.extend(shopee_page(page, platform, n))
                 elif platform == 'LAZADA':
                     orders.append(lazada_page(page, n))
                 else:
                     orders.append(tiktok_page(page, n))
-    except PackingError:
+    except PackingError as exc:
+        exc.platform = platform or ''
         raise
     except Exception as exc:
-        raise PackingError(f'Cannot read this PDF: {exc}') from exc
+        error = PackingError(f'Cannot read this packing list: {exc}') if platform else UnsupportedPdf(f'Cannot read this PDF: {exc}')
+        error.platform = platform or ''
+        raise error from exc
     if not orders:
-        raise PackingError('No orders found.')
+        error = PackingError('No orders found.'); error.platform = platform
+        raise error
+    if platform in ('SPX', 'FLASH', 'SHOPEE'):
+        try:
+            orders = combine_shopee_parts(orders)
+        except PackingError as exc:
+            exc.platform = platform
+            raise
     combined = OrderedDict()
     for order in orders:
         if order.key in combined:

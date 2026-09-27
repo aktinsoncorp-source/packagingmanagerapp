@@ -1,12 +1,13 @@
-# Packing List Manager 1.6.1 handover
+# Packing List Manager 1.7.0 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.6.1. The preceding installed 1.6 release,
-including its private catalog, is preserved in qa/previous-release-1.6.0.
+The executable and engine are version 1.7.0. The preceding installed 1.6.1 release,
+including its private catalog, is preserved in PackingListApp/qa/previous-release-1.6.1.
+The 1.6.0 backup remains in PackingListApp/qa/previous-release-1.6.0.
 The version 1.5 backup remains in qa/previous-release-1.5.0.
 The earlier 1.4 backup also remains. Installed files match the staged build.
 
@@ -121,6 +122,43 @@ All six final preview pages were rendered with Poppler and visually reviewed.
 17 order headers / 30 pieces passed across all four platforms. Installed files match
 the tested staged build, and ProductNames.json was unchanged by installation. Source release
 and employee help are updated; local version bundle is under Git/v1.6.1.
+
+## Version 1.7 continued orders and courier selection
+
+Shopee fragments with one footer Order ID are supported after a first label with
+its heading and item 1. Every later fragment must continue the printed numbering
+for that Order ID. They become one order; gaps, overlaps, duplicated full labels,
+or orphan continuation fragments remain errors. Multiple-package labels remain
+unsupported. Original product names/variations and quantities are retained.
+
+The main PDF grid now has per-file Auto, SPX and FLASH choices for Shopee. Auto
+prioritizes the nearest exact SPX/FLASH folder (case insensitive), then one filename
+label, then unambiguous remaining path hints. Explicit choices override Auto and
+persist by relative path and SHA256 in 000 Output/Courier_Selections.json. Changed
+PDF contents reset the choice to Auto; stale UI choices are rejected at generation.
+Lazada/TikTok have disabled dash cells. Compatible PDFs anywhere under the selected
+dated folder are included, excluding 000 Output. Unrecognized, corrupt, scanned and
+textless PDFs are omitted. Recognized packing data errors remain visible. Generic
+Shopee PDFs lacking a courier remain visible with counts and require a choice.
+Add PDFs accepts those generic files into the dated folder root.
+
+Version 1.7 verification (September 27):
+- All 80 regression tests passed: qa/couriers-1.7-tests.log.
+- The final packaged Windows form verified Auto -> FLASH -> SPX -> Auto changes,
+  persistence across scans, disabled non-Shopee cells, and select-all eligibility.
+  Five supported PDFs appeared; blank/corrupt files were hidden. The main screenshot
+  confirms FLASH/SPX_old.pdf resolves to FLASH in Auto because its folder wins.
+- The reported 32-page SPX PDF generated 127 orders / 300 pieces. Continued order
+  2609263ADBUPHF contains 11 product lines / 14 pieces in one table. The summary
+  contains 300 pieces. Word verified all 127 orders stay together on A4, with the
+  picking summary after a page break; the output is 16 pages including summary.
+- The continued-order page and summary total page were rendered via Word/Poppler
+  and visually checked. Report: qa/couriers-1.7-verification.json. QA used isolated
+  copies and a separate name catalog; production documents were not regenerated.
+- Installation checked all 297 packaged engine files plus the executable, icon and
+  guide against the tested candidate. ProductNames.json, its backup and Settings.json
+  were unchanged. Report: qa/couriers-1.7-installation.json. Employee help is updated.
+- Local source checkpoint: Git/v1.7.0. Previous version folders are preserved.
 
 ## Maintenance
 
