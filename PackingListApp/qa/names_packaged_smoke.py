@@ -11,6 +11,7 @@ ROOT = APP.parent
 sys.path.insert(0, str(APP / 'src'))
 from docx import Document
 from documents import verify_word
+from engine import VERSION
 
 work = Path(tempfile.mkdtemp(prefix='names-packaged-', dir=APP / 'qa'))
 folder = work / '20260926'
@@ -31,7 +32,7 @@ def call(action, **kwargs):
 
 
 scan = call('scan')
-assert scan['version'] == '1.6.0'
+assert scan['version'] == VERSION
 data = call('names_list')
 assert data['rows']
 for row in data['rows']:
@@ -50,7 +51,7 @@ assert doc.tables[-1].cell(1, 1).text == 'QA STANDARD INVENTORY ITEM'
 assert doc.tables[-1].cell(1, 3).text == '8'
 assert call('scan')['entries'][0]['status'] == 'DONE'
 layout = verify_word([output], export_pdf=True)
-report = {'ok': True, 'version': '1.6.0', 'work': str(work), 'output': str(output), 'layout': layout,
+report = {'ok': True, 'version': VERSION, 'work': str(work), 'output': str(output), 'layout': layout,
           'orders': 7, 'pieces': 8, 'summary_rows': 1, 'original_fingerprints_preserved': True}
 (APP / 'qa/names-packaged-verification.json').write_text(json.dumps(report, indent=2))
 print(json.dumps(report, indent=2))

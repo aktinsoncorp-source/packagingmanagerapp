@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.6.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.6.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.6.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.6.1.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -66,7 +66,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.6";
+            Text = "Packing List Manager 1.6.1";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);

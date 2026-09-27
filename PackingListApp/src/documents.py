@@ -12,6 +12,7 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.table import Table
+from docx.shared import Pt
 from docx.text.paragraph import Paragraph
 
 from extractors import Batch, PackingError
@@ -32,6 +33,23 @@ def set_text(paragraph, text):
             r.text = text if r is target else ''
 
 
+def set_order_header(paragraph, platform, order_id):
+    """Keep all handwriting fields in the existing merged order-header cell."""
+    paragraph.clear()
+    tabs = paragraph.paragraph_format.tab_stops
+    tabs.clear_all()
+    for position in (185, 340, 440):
+        tabs.add_tab_stop(Pt(position))
+    label = 'Order Number' if platform == 'LAZADA' else 'Order ID'
+    fields = [f'{label}: {order_id}', '\tEmployee:__________________',
+              '\tNumber __________', '\tTime __________']
+    for index, text in enumerate(fields):
+        run = paragraph.add_run(text)
+        run.font.name = 'Arial'
+        run.font.size = Pt(9.5)
+        run.bold = index == 0
+
+
 def build_document(batches: list[Batch], group: str, date: str, destination: Path, revision=False):
     d = Document(ASSETS / ('blue.docx' if group == 'LAZADA_TIKTOK' else 'orange.docx'))
     body = d._element.body
@@ -50,7 +68,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
     set_text(p, f'{display_group} Packing List {date_obj.day} {date_obj:%B %Y}')
     append(title)
     p = Paragraph(intro, d._body)
-    intro_text = 'One table is one order. Write the number used on the waybill and the packing completion time in its header.'
+    intro_text = "One table is one order. Write the employee name, waybill number, and packing completion time in its header."
     if group == 'LAZADA_TIKTOK':
         intro_text += '  — = no variation provided.'
     if revision:
@@ -74,9 +92,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
             tbl = deepcopy(table_proto)
             table = Table(tbl, d._body)
             header = table.cell(0, 0).paragraphs[0]
-            for run in header.runs:
-                if 'Order ' in run.text:
-                    run.text = f"{'Order Number' if order.platform == 'LAZADA' else 'Order ID'}: {order.order_id}"
+            set_order_header(header, order.platform, order.order_id)
             row_proto = deepcopy(table.rows[2]._tr)
             tbl.remove(table.rows[2]._tr)
             for item_no, item in enumerate(order.items):
@@ -138,7 +154,9 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
     for table, order in zip(actual.tables, (o for b in batches for o in b.orders)):
         expected = [[i.product, i.variation, str(i.pieces)] for i in order.items]
         rows = [[c.text for c in row.cells[1:]] for row in table.rows[2:]]
-        if rows != expected or order.order_id not in table.cell(0,0).text:
+        header = table.cell(0, 0).text
+        expected_header = f"{'Order Number' if order.platform == 'LAZADA' else 'Order ID'}: {order.order_id}\tEmployee:__________________\tNumber __________\tTime __________"
+        if rows != expected or header != expected_header:
             raise PackingError(f'Document verification failed for order {order.order_id}.')
     got = [(r.cells[1].text, r.cells[2].text, int(r.cells[3].text)) for r in actual.tables[-1].rows[1:-1]]
     total = sum(b.pieces for b in batches)

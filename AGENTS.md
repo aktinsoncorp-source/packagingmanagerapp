@@ -3,7 +3,7 @@
 - Always use A4 paper for packing lists.
 - Use one clearly separated bordered table per order. Show the Order ID once as the table header and keep all products for that order underneath it.
 - Keep each entire order table together on one page.
-- Include blank Number and Time underlines inside each order table header. Staff write their own number to link the packing list to the printed waybill, and the packing completion time.
+- Include Employee:__________________ after the Order ID/Order Number, followed by the blank Number and Time underlines inside each order table header. Staff write their own number to link the packing list to the printed waybill, and the packing completion time.
 - Include product name, variation, and number of pieces. Preserve source batch grouping.
 - At the end of every generated packing document, add a product picking summary after a page break. Apply the saved Define Name alternatives independently to product name and variation; blank alternatives retain their original fields. Combine matching final product names and variations only within that generated document. Preserve original source data and fingerprints in processing history, plus a separate immutable snapshot of the printed names.
 - Use light orange order headers with dark text. Use subtle pale orange or cream shading where it improves readability.

@@ -20,7 +20,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.6.0'
+VERSION = '1.6.1'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'

@@ -112,3 +112,16 @@ case-insensitive matching, trimming, paragraphs, migration, deletion and Excel l
 `qa/NamesUiSmoke.cs` also exercises these behaviors in the real form and desktop Excel.
 Use `PYTHONUTF8=1` when running the historical Windows test suite.
 The build script accepts `-ReleasePath` for testing a staged build before installation.
+
+
+## Employee header update (version 1.6.1)
+
+`documents.set_order_header` writes the order identifier, Employee:__________________,
+Number and Time in the existing merged header cell. Arial 9.5 pt is retained, with
+left tab stops at 185, 340 and 440 pt so the four fields fit the A4 table width.
+Only the identifier is bold; the source orange/blue table designs remain intact.
+The builder verifies each full header when reopening the created document.
+`qa/employee_headers_smoke.py` checks the packaged engine on copied PDFs from all
+four platforms, verifies quantities and history parsing, runs real Word pagination,
+and checks in exported PDFs that every header field stays on one line without overlap.
+Existing completed files are preserved; regenerating produces the updated layout.

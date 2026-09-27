@@ -2,7 +2,7 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.6.0**.
+Current engine version: **1.6.1**.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -76,7 +76,7 @@ A Git bundle is a portable copy of committed repository history. To restore a
 provided bundle into a new folder:
 
 ```powershell
-git clone "Git/v1.6.0/PackingListManager-1.6.0.bundle" "PackingListManager-Restored"
+git clone "Git/v1.6.1/PackingListManager-1.6.1.bundle" "PackingListManager-Restored"
 ```
 
 This restores the tracked program files. It does not restore the installed
@@ -100,3 +100,12 @@ The first selected definition stays as the base and retains every linked origina
 View reveals the linked pairs. All four fields are uppercase, trailing spaces are trimmed,
 and multiline input is rejected. Excel edits preserve links and can edit every original.
 Local source checkpoint: `Git/v1.6.0`; older version folders remain available.
+
+
+## Version 1.6.1 - employee identification
+
+Every generated order header now contains Order ID/Order Number, followed by
+Employee:__________________, Number and Time. This applies to SPX, FLASH, Lazada
+and TikTok, retaining the orange/blue themes and A4 layout. Regenerate an older
+batch to include the field in a new numbered document. Source data is unchanged.
+Local source checkpoint: `Git/v1.6.1`.

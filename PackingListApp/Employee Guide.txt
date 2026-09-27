@@ -1,5 +1,5 @@
 PACKING LIST MANAGER
-Employee guide - version 1.6
+Employee guide - version 1.6.1
 Help updated September 27, 2026
 
 Start
@@ -338,3 +338,11 @@ the application when moving or backing it up. Version 1.6 upgrades the existing
 catalog to uppercase with its IDs and deletions preserved, and keeps a backup.
 If the catalog is unreadable, restore a valid backup; it is not silently replaced.
 The temporary Excel workbook is an editing session, not a backup.
+
+Employee field on every order (version 1.6.1)
+Every newly generated SPX, FLASH, Lazada and TikTok order header now reads:
+Order ID / Order Number, Employee:__________________, Number, Time.
+Write the name of the person who packed that order on the Employee line.
+The employee field appears after the order identifier and before Number.
+Existing Word documents keep their saved layout. To add the field to an older
+batch, select its source PDFs again and generate a new numbered document.

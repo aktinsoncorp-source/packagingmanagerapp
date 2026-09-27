@@ -1,12 +1,13 @@
-# Packing List Manager 1.6 handover
+# Packing List Manager 1.6.1 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.6.0. The preceding installed 1.5 release,
-including its latest private catalog, is preserved in qa/previous-release-1.5.0.
+The executable and engine are version 1.6.1. The preceding installed 1.6 release,
+including its private catalog, is preserved in qa/previous-release-1.6.0.
+The version 1.5 backup remains in qa/previous-release-1.5.0.
 The earlier 1.4 backup also remains. Installed files match the staged build.
 
 ## Version 1.5 foundation
@@ -101,6 +102,25 @@ Version 1.6 verification (September 27):
 - Existing production documents were not regenerated. The installed UI and engine
   version is 1.6.0; qa/names-1.6-migration-verification.json records the catalog upgrade.
 - Source and full employee help are updated. Local Git checkpoint is in Git/v1.6.0.
+
+## Version 1.6.1 employee field
+
+All generated order-table headers now read Order ID/Order Number, followed by
+Employee:__________________, Number and Time. The employee line has 18 underscores.
+The shared builder applies it to SPX, FLASH, Lazada and TikTok, in both orange and
+blue templates. It retains Arial 9.5 pt and uses three tab stops (185/340/440 pt).
+The introduction now tells staff to write the employee name as well as number/time.
+Document re-open validation checks the full header text. No name-catalog schema or
+business-data changes are involved. Existing completed documents keep their layout;
+regenerate selected PDFs to obtain the employee field in a new numbered document.
+
+Verification report: qa/employee-1.6.1-verification.json. The smoke script uses copied
+PDFs and an isolated catalog, actual packaged generation, Word pagination, original
+quantity checks, a second scan, and PDF checks for field order and single-line fit.
+All six final preview pages were rendered with Poppler and visually reviewed.
+17 order headers / 30 pieces passed across all four platforms. Installed files match
+the tested staged build, and ProductNames.json was unchanged by installation. Source release
+and employee help are updated; local version bundle is under Git/v1.6.1.
 
 ## Maintenance
 
