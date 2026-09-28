@@ -21,7 +21,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.9.0'
+VERSION = '1.10.0'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'
@@ -527,9 +527,11 @@ def repeat_warning(selected, batches, history, output_format):
             'repeat_token': token}
 
 
-def generate(folder, selected, verifier=verify_word, catalog_path=None, output_format='docx', repeat_confirmation=None):
+def generate(folder, selected, verifier=verify_word, catalog_path=None, output_format='docx', repeat_confirmation=None, repeat_action='include'):
     if output_format not in ('pdf', 'docx'):
         raise PackingError('Choose PDF or Word output.')
+    if repeat_action not in ('include', 'skip'):
+        raise PackingError('Choose whether to include or skip already-generated orders.')
     if not selected:
         raise PackingError('Select at least one PDF to generate.')
     with folder_lock(folder) as out:
@@ -568,6 +570,23 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
         warning = repeat_warning(selected, batches, history, output_format)
         if warning['repeat_count'] and repeat_confirmation != warning['repeat_token']:
             return warning
+        skipped_existing = set()
+        if repeat_action == 'skip':
+            available = available_order_outputs(folder, history)
+            filtered = []
+            for key, batch in chosen:
+                remaining = []
+                for order in batch.orders:
+                    if available.get((order.key, order.fingerprint())):
+                        skipped_existing.add(order.key)
+                    else:
+                        remaining.append(order)
+                if remaining:
+                    filtered.append((key, replace(batch, orders=remaining)))
+            chosen = filtered
+            if not chosen:
+                return {'ok': True, 'outputs': [], 'skipped_repeat_orders': len(skipped_existing),
+                        'message': 'No new orders to generate. All selected orders already have generated documents.'}
         catalog = encounter(catalog_path, batches.values()) if catalog_path is not None else {'revision': 0, 'rows': []}
         grouped = defaultdict(list)
         for key, batch in chosen:
@@ -610,7 +629,8 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
             when = datetime.now().isoformat(timespec='seconds')
             lines = [f'COMPLETED BY PACKING LIST MANAGER {VERSION}', f'Time: {when}',
                      f'Product name definitions revision: {catalog["revision"]}', f'Output format: {output_format.upper()}',
-                     'Each selected PDF contributes its orders. Repeated orders within this run appear once.',
+                     'Repeated orders within this run appear once.',
+                     f'Already-generated orders skipped: {len(skipped_existing)}',
                      'Selected PDFs: ' + ', '.join(s['path'] for s in selected)]
             if history.get('legacy'):
                 lines.append('Earlier PDF-to-document associations retained from the processing log and available documents; source fingerprints saved in Processing_History.json.')
@@ -636,8 +656,8 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                 for key, batch in values:
                     if mode == 'revision':
                         previous_keys = set(history['sources'].get(key, {}).get('order_keys', []))
-                        removed.update(previous_keys - {o.key for o in batch.orders})
-                        for removed_key in previous_keys - {o.key for o in batch.orders}:
+                        removed.update(previous_keys - {o.key for o in batches[key].orders})
+                        for removed_key in previous_keys - {o.key for o in batches[key].orders}:
                             if removed_key in new_history['orders']:
                                 prior = new_history['orders'][removed_key]
                                 record_replacements(removed_key)
@@ -709,6 +729,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                 stage.rmdir()
             raise
         return {'ok': True, 'message': f'Created {len(plans)} packing document(s).',
+                'skipped_repeat_orders': len(skipped_existing),
                 'outputs': [{'path': str(out/p['filename']), 'filename': p['filename'],
                              'pages': page_counts.get(p['filename']), 'mode': p['mode']} for p in plans]}
 
@@ -785,7 +806,7 @@ def handle(request):
     if action == 'generate':
         if request.get('output_format', 'pdf') != 'pdf':
             raise PackingError('Packing List Manager exports PDF only.')
-        return generate(folder, request['selected'], catalog_path=catalog_path, output_format='pdf', repeat_confirmation=request.get('repeat_confirmation'))
+        return generate(folder, request['selected'], catalog_path=catalog_path, output_format='pdf', repeat_confirmation=request.get('repeat_confirmation'), repeat_action=request.get('repeat_action', 'include'))
     if action == 'import': return import_pdfs(folder, request['files'], request.get('carrier'))
     if action == 'acknowledge': return acknowledge(folder, request['selected'])
     raise PackingError('Unknown action.')

@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.9.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.9.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.10.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.10.0.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -67,7 +67,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.9";
+            Text = "Packing List Manager 1.10";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -533,17 +533,20 @@ namespace PackingListManager {
                 var result=await Call(request,"Preparing PDF packing lists and checking A4 pagination. Please wait...");
                 while(B(result,"confirmation_required")) {
                     using(var warning=PackingDialogs.RepeatWarning(N(result,"repeat_count"))) {
-                        if(warning.ShowDialog(this)!=DialogResult.Yes){status.Text="Generation cancelled. No documents created.";return;}
+                        var decision=warning.ShowDialog(this);
+                        if(decision!=DialogResult.Yes&&decision!=DialogResult.No){status.Text="Generation cancelled. No documents created.";return;}
+                        request["repeat_action"]=decision==DialogResult.No?"skip":"include";
                     }
                     request["repeat_confirmation"]=result["repeat_token"];
                     result=await Call(request,"Generating the confirmed packing lists. Please wait...");
                 }
                 var made=Rows(result["outputs"]);
                 await Scan();
+                if(made.Count==0){status.Text=S(result,"message");MessageBox.Show(this,S(result,"message"),"No new orders",MessageBoxButtons.OK,MessageBoxIcon.Information);return;}
                 using(var done=new Form {Text="Packing lists ready",Size=new Size(720,340),StartPosition=FormStartPosition.CenterParent,Font=Font}) {
                     var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(20),RowCount=3};
                     layout.RowStyles.Add(new RowStyle(SizeType.Absolute,50));layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,50));
-                    layout.Controls.Add(new Label {Text="Packing lists are ready. Open a document and print on A4.",Dock=DockStyle.Fill,Font=new Font(Font,FontStyle.Bold)},0,0);
+                    layout.Controls.Add(new Label {Text=N(result,"skipped_repeat_orders")>0?"Packing lists are ready. "+N(result,"skipped_repeat_orders")+" already-generated order(s) skipped. Print on A4.":"Packing lists are ready. Open a document and print on A4.",Dock=DockStyle.Fill,Font=new Font(Font,FontStyle.Bold)},0,0);
                     var list=new ListBox {Dock=DockStyle.Fill};foreach(var o in made)list.Items.Add(S(o,"filename")+"  ("+S(o,"pages")+" pages)");if(list.Items.Count>0)list.SelectedIndex=0;layout.Controls.Add(list,0,1);
                     var buttons=new FlowLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(0,10,0,0)};
                     var open=new Button {Text="Open document",Width=150,Height=32};open.Click+=(s,e)=>{if(list.SelectedIndex>=0)OpenFile(S(made[list.SelectedIndex],"path"));};buttons.Controls.Add(open);

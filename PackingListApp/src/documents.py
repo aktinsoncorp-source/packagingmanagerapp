@@ -101,7 +101,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
                 cells = table.rows[-1].cells
                 for cell, text in zip(cells, ['[     ]', item.product, item.variation, str(item.pieces)]):
                     set_text(cell.paragraphs[0], text)
-                    fill = 'F2F2F2'
+                    fill = 'FFFFFF' if item_no % 2 == 0 else 'F2F2F2'
                     cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), fill)
             for row_no, row in enumerate(table.rows):
                 for cell in row.cells:
@@ -133,7 +133,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
             set_text(cell.paragraphs[0], text)
             cell.paragraphs[0].paragraph_format.keep_with_next = i == len(summary_rows)-1
             cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'),
-                'F2F2F2')
+                'FFFFFF' if i % 2 == 0 else 'F2F2F2')
     tbl.append(total_proto)
     set_text(table.rows[-1].cells[3].paragraphs[0], str(sum(r[2] for r in summary_rows)))
     append(tbl)

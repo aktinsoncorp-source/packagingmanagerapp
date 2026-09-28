@@ -1,5 +1,5 @@
 PACKING LIST MANAGER
-Employee guide - version 1.9.0
+Employee guide - version 1.10.0
 Help updated September 28, 2026
 
 Start
@@ -134,17 +134,19 @@ Daily steps
    format selection. Microsoft Word checks A4 layout and creates the PDF export.
    Only the finished PDF is saved into 000 Output and Completed documents.
 5. If a repeat warning appears, the large centered No button is selected by
-   default. Enter, Escape or closing the warning cancels. To deliberately generate
-   those orders again, click the small gray text below No:
+   default. No (also Enter/Escape) generates orders that still need an output and
+   skips orders already covered by a current generated document. If all are covered,
+   the program says there are no new orders; it does not create an empty file.
+   To deliberately include previously generated orders, click the small gray text:
    Continue to Generate the Repeated Orders
-   That text has no button border. Choosing No creates no completed documents.
+   That text has no button border. Closing with X cancels.
 6. Open and print the generated PDF in your PDF viewer. Use A4 paper.
 
 What is generated
 - One PDF for SPX and one for FLASH, with orange order headers and light peach
-  column headers. Product rows are light gray.
+  column headers. Product rows alternate white and light gray.
 - One combined PDF for Lazada and TikTok, using blue order/column headers,
-  light gray product rows and separate platform labels. A batch containing only one of these platforms
+  alternating white/light-gray product rows and separate platform labels. A batch containing only one of these platforms
   still uses the LAZADA_TIKTOK filename sequence.
 - All files go in the selected dated folder's 000 Output folder.
 - Each group uses the next suffix: _1.pdf, _2.pdf, _3.pdf, and so on.
@@ -180,14 +182,17 @@ Warning: There are orders in this packing list that has repeated. Do you wish to
 continue and generate the repeating orders again?
 No is large, centered and highlighted. The smaller gray continuation text is
 centered underneath, within the width of No, and has no box. Click that text only
-for an intentional reprint or revised batch. The program checks again after confirmation
-if the selection has changed. Identical overlapping orders print once per run.
+for an intentional reprint. No generates only orders without a current matching output.
+A deleted output can be generated again with No. An unprocessed order appearing in
+several source PDFs is still included once. Reviewed changes to an order remain
+eligible when its current details differ from the earlier document. The program
+rechecks the sources and decision before generation.
 History checks are per dated folder; they do not search other dates or computers.
 
 Product picking summary
 Every generated document ends with a Product Picking Summary on a new page.
 It lists the product, variation or size, and total pieces needed from inventory.
-Product rows use light gray shading, with the platform-colored column header
+Product rows alternate white and light gray, with the platform-colored column header
 and total row retained. Each summary covers ONLY the orders in that document. Later batches get their
 own summaries covering the PDFs selected for that run. Regenerating a PDF
 also includes its orders again in that new document and summary.
@@ -206,9 +211,10 @@ Add the new PDFs and scan again. Generate creates the next batch.
 Give later source PDFs a new filename, such as 20260927_SPX_PL_2.pdf, and
 keep them in the same day's SPX folder. Keep earlier source files in place;
 replacing a processed PDF triggers a changed-file review.
-Existing batches are kept. Generating includes all orders in the selected
-PDFs, including previously generated orders. An order repeated across the
-PDFs selected in the same run appears once. Uncheck PDFs you do not want.
+Existing batches are kept. Choose No in the repeat warning to generate only orders
+that still need a document. The gray continuation text includes earlier generated
+orders too. An order repeated across selected PDFs appears once in each new output
+batch. Uncheck PDFs you do not want.
 A renamed copy is identified as repeated and stays unchecked by default;
 you can still tick it to generate another copy.
 

@@ -38,7 +38,7 @@ namespace PackingListManager {
             find.Controls.Add(new Label {Text="Search",AutoSize=true,Margin=new Padding(0,6,10,0)});
             search.Width=390;find.Controls.Add(search);count.AutoSize=true;count.Margin=new Padding(16,6,0,0);find.Controls.Add(count);
             lockButton=new Button {Name="lockNames",Text="",Width=38,Height=32,Image=LockIcon(false),AccessibleName="Lock name editing",FlatStyle=FlatStyle.Flat,Margin=new Padding(18,0,4,0)};
-            unlockButton=new Button {Name="unlockNames",Text="",Width=38,Height=32,Image=LockIcon(true),AccessibleName="Unlock name editing",FlatStyle=FlatStyle.Flat};
+            unlockButton=new Button {Name="unlockNames",Text="",Width=38,Height=32,Image=LockIcon(true),AccessibleName="Unlock name editing",FlatStyle=FlatStyle.Flat,Margin=new Padding(0,0,0,0)};
             lockTips.SetToolTip(lockButton,"Lock name editing");lockTips.SetToolTip(unlockButton,"Unlock name editing");
             lockButton.Click+=(s,e)=>SetEditLocked(true);unlockButton.Click+=(s,e)=>SetEditLocked(false);
             find.Controls.Add(lockButton);find.Controls.Add(unlockButton);layout.Controls.Add(find,0,1);
@@ -169,11 +169,16 @@ namespace PackingListManager {
         }
         static Bitmap LockIcon(bool open) {
             var image=new Bitmap(24,24);
-            using(var g=Graphics.FromImage(image))using(var pen=new Pen(Color.FromArgb(31,55,78),2))using(var brush=new SolidBrush(Color.FromArgb(31,55,78))) {
+            using(var g=Graphics.FromImage(image))using(var pen=new Pen(Color.Black,2.5F))using(var body=new System.Drawing.Drawing2D.GraphicsPath()) {
                 g.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                if(open){g.DrawArc(pen,9,2,10,12,180,180);g.DrawLine(pen,9,8,9,13);}
-                else {g.DrawArc(pen,7,2,10,12,180,180);g.DrawLine(pen,7,8,7,13);g.DrawLine(pen,17,8,17,13);}
-                g.DrawRectangle(pen,5,11,14,10);g.FillEllipse(brush,10,14,4,4);g.DrawLine(pen,12,17,12,19);
+                pen.StartCap=pen.EndCap=System.Drawing.Drawing2D.LineCap.Round;
+                pen.LineJoin=System.Drawing.Drawing2D.LineJoin.Round;
+                // Matching outline padlocks: same body and baseline, no circle or keyhole.
+                g.DrawArc(pen,7,2,10,10,180,180);g.DrawLine(pen,7,7,7,12);
+                if(!open)g.DrawLine(pen,17,7,17,13);
+                body.AddArc(4,12,3,3,180,90);body.AddArc(17,12,3,3,270,90);
+                body.AddArc(17,19,3,3,0,90);body.AddArc(4,19,3,3,90,90);body.CloseFigure();
+                g.DrawPath(pen,body);
             }
             return image;
         }

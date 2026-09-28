@@ -123,3 +123,74 @@ class ExportTests(unittest.TestCase):
             with self.assertRaisesRegex(PackingError,'PDF only'):
                 engine.handle({'action':'generate','folder':str(self.folder),'selected':[],'output_format':'docx'})
             generate.assert_not_called()
+
+
+class SkipRepeatTests(unittest.TestCase):
+    setUp=ExportTests.setUp
+    tearDown=ExportTests.tearDown
+    parse=ExportTests.parse
+    source=ExportTests.source
+    scan=ExportTests.scan
+    history=ExportTests.history
+    selected=ExportTests.selected
+    make=ExportTests.make
+    def skip(self, selection=None):
+        selection=self.selected() if selection is None else selection
+        warning=engine.generate(self.folder,selection,verifier=layout,repeat_action='skip')
+        if warning.get('confirmation_required'):
+            return engine.generate(self.folder,selection,verifier=layout,repeat_action='skip',repeat_confirmation=warning['repeat_token'])
+        return warning
+    def test_no_generates_new_orders_only_and_retains_earlier_output(self):
+        self.source('old.pdf',['A']);old=self.make('docx')
+        self.source('mixed.pdf',['A','B'])
+        result=self.skip(self.selected(['mixed.pdf']))
+        self.assertEqual(result['skipped_repeat_orders'],1)
+        self.assertEqual(len(result['outputs']),1)
+        saved=self.history()['outputs'][result['outputs'][0]['filename']]
+        self.assertEqual(saved['orders'],['SHOPEE:B']);self.assertEqual(saved['sources'][0]['order_keys'],['SHOPEE:B'])
+        self.assertEqual(saved['order_snapshots']['SHOPEE:B']['items'][0]['pieces'],2)
+        self.assertEqual(self.history()['orders']['SHOPEE:A']['output'],old['filename'])
+        self.assertTrue(Path(old['path']).exists())
+        self.assertTrue(all(e['message']=='Process again' for e in self.scan()['entries']))
+    def test_no_with_all_processed_produces_no_empty_document_or_history_change(self):
+        self.source('a.pdf',['A']);self.make();before=self.history()
+        with patch.object(engine,'build_document') as build:
+            result=self.skip();build.assert_not_called()
+        self.assertEqual(result['outputs'],[]);self.assertIn('No new orders',result['message'])
+        self.assertEqual(before,self.history())
+    def test_no_recovers_deleted_outputs(self):
+        self.source('a.pdf',['A']);old=self.make();Path(old['path']).unlink()
+        result=self.skip();self.assertEqual(len(result['outputs']),1)
+        self.assertEqual(result['skipped_repeat_orders'],0)
+        self.assertTrue(result['outputs'][0]['filename'].endswith('_1.docx'))
+    def test_no_retains_new_order_shared_by_two_unprocessed_pdfs_once(self):
+        self.source('a.pdf',['A','B']);self.source('b.pdf',['B','C'])
+        result=self.skip();saved=self.history()['outputs'][result['outputs'][0]['filename']]
+        self.assertEqual(set(saved['orders']),{'SHOPEE:A','SHOPEE:B','SHOPEE:C'})
+        self.assertEqual(len(saved['orders']),3);self.assertEqual(result['skipped_repeat_orders'],0)
+    def test_no_does_not_bypass_confirmation_token(self):
+        self.source('a.pdf',['A']);self.make()
+        answer=engine.generate(self.folder,self.selected(),verifier=layout,repeat_action='skip',repeat_confirmation='wrong')
+        self.assertTrue(answer['confirmation_required'])
+    def test_no_revision_preserves_unchanged_orders_and_real_removals(self):
+        self.source('a.pdf',['A','B','C']);old=self.make('docx')
+        self.source('a.pdf',['A','B'],quantity=3);self.items['a.pdf'][0].items[0].pieces=2
+        selection=self.selected();selection[0]['revision']=True
+        result=self.skip(selection);saved=self.history()['outputs'][result['outputs'][0]['filename']]
+        self.assertEqual(saved['orders'],['SHOPEE:B']);self.assertEqual(saved['removed_orders'],['SHOPEE:C'])
+        self.assertNotIn('removed_from_source_in',self.history()['orders']['SHOPEE:A'])
+        self.assertEqual(self.history()['orders']['SHOPEE:A']['output'],old['filename'])
+        self.assertEqual(set(self.history()['outputs'][old['filename']]['superseded_orders']),{'SHOPEE:B','SHOPEE:C'})
+    def test_public_generate_forwards_no_decision(self):
+        with patch.object(engine,'generate',return_value={'ok':True}) as generate:
+            engine.handle({'action':'generate','folder':str(self.folder),'selected':[],'repeat_action':'skip'})
+            self.assertEqual(generate.call_args.kwargs['repeat_action'],'skip')
+    def test_alternating_white_gray_rows_keep_themed_headers(self):
+        from docx.oxml.ns import qn
+        from extractors import Item
+        self.source('a.pdf',['A']);self.items['a.pdf'][0].items += [Item('Soap two','Lime',3),Item('Soap three','Mint',1)]
+        doc=Document(self.make('docx')['path'])
+        def fill(row):return [c._tc.get_or_add_tcPr().find(qn('w:shd')).get(qn('w:fill')) for c in row.cells]
+        for table,first in [(doc.tables[0],2),(doc.tables[-1],1)]:
+            self.assertEqual([fill(table.rows[first+i]) for i in range(3)],[['FFFFFF']*4,['F2F2F2']*4,['FFFFFF']*4])
+            self.assertNotIn(fill(table.rows[first-1])[0],['FFFFFF','F2F2F2'])

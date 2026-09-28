@@ -1,12 +1,13 @@
-# Packing List Manager 1.9.0 handover
+# Packing List Manager 1.10.0 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.9.0. The preceding installed 1.8.0 release,
-including its private catalog, is preserved in PackingListApp/qa/previous-release-1.8.0.
+The executable and engine are version 1.10.0. The preceding installed 1.9.0 release,
+including its private catalog, is preserved in PackingListApp/qa/previous-release-1.9.0.
+The 1.8.0 backup remains in PackingListApp/qa/previous-release-1.8.0.
 The 1.7.0 backup remains in PackingListApp/qa/previous-release-1.7.0.
 The 1.6.1 backup remains in PackingListApp/qa/previous-release-1.6.1.
 The 1.6.0 backup remains in PackingListApp/qa/previous-release-1.6.0.
@@ -246,6 +247,46 @@ Verification September 28:
   against the tested candidate. ProductNames.json, its backup and Settings.json were
   unchanged. Report: qa/release-1.9-installation.json. Production documents were not
   regenerated. Source/history checkpoint: Git/v1.9.0; earlier versions are preserved.
+
+## Version 1.10 focused repeat, row and lock changes
+
+- No in the warning now generates orders without a surviving matching output and
+  skips already-covered orders. The gray continuation link includes earlier orders.
+  All-covered selections report no new orders and create no empty document/history.
+  Deleted outputs and explicitly reviewed changed order versions remain eligible.
+  The extra Matching orders sentence was removed only from the warning.
+- Product rows alternate white/light gray; peach/blue headers and totals are retained.
+- Lock icons are aligned and use simple outline bodies/open or closed shackles from
+  the user's reference style, with no enclosing circles or keyholes. Lock logic stays.
+- Performance work is restricted to Word automation: cached range/page properties,
+  painting disabled in the owned Word instance, and an equivalent whole-summary check
+  when it occupies one page. Multi-page summaries still check each row. All other
+  source, order-content, quantity, hashing and pagination verification remains.
+- Version 1.9 descriptions above are historical; No no longer cancels generation.
+  Closing X still cancels; Enter/Escape choose No. Employee help is updated.
+
+Verification September 28:
+- All 105 regression tests passed in 68.7 seconds: qa/release-1.10-tests.log. New cases
+  cover mixed old/new, all-covered, deleted outputs, new shared orders, repeat tokens,
+  revision removals, public No forwarding and alternating shading.
+- Actual dialog and aligned-padlock tests passed under qa/release110-controls. Default
+  locked state, unlocking and relocking remain correct. X was tested in modal mode.
+- Packaged engine generated three PDFs covering 17 orders/30 pieces, skipped the
+  previously generated SPX selection while producing the other two groups, avoided an
+  empty document for all-covered No, and produced an intentional SPX _2.pdf reprint.
+  Main UI courier controls, check-all, manual selection and dynamic totals passed.
+  Report: qa/release-1.10-verification.json; run: qa/release110-4rkvocaf.
+- Six initial sample PDF pages and the 15-page 127-order/300-piece continuation sample
+  were rendered and visually checked. All 38 widened boxes remained in the small set.
+- Old/new Word check/export on the same three documents took 11.757/9.475 seconds in
+  one local comparison (~19% faster for that phase). The large sample took 45.955 vs
+  44.386 seconds for Word (a smaller gain). These are sample timings, not a promised
+  overall speedup. Every page's PDF text and pagination matched in both comparisons.
+  Evidence: qa/performance110/comparison.json, baseline.json and updated.json.
+- Installation verified 297 engine files plus executable, icon and employee guide.
+  ProductNames.json, its backup and Settings.json were preserved. Report:
+  qa/release-1.10-installation.json. No production documents were regenerated.
+- Local Git source/history checkpoint: Git/v1.10.0. Earlier version folders remain.
 
 ## Maintenance
 

@@ -6,6 +6,7 @@ $documents = @()
 try {
     $word = New-Object -ComObject Word.Application
     $word.Visible = $false
+    $word.ScreenUpdating = $false
     $word.DisplayAlerts = 0
     $word.AutomationSecurity = 3
     foreach ($path in $request.paths) {
@@ -22,23 +23,36 @@ try {
             $summaryCount = 0
             $lastOrderPage = 0
             foreach ($table in $doc.Tables) {
-                $start = $doc.Range($table.Range.Start, $table.Range.Start)
-                $end = $doc.Range($table.Range.End - 1, $table.Range.End - 1)
+                # Cache COM values instead of repeatedly crossing into Word.
+                $tableRange = $table.Range
+                $tableStart = $tableRange.Start
+                $tableEnd = $tableRange.End - 1
+                $start = $doc.Range($tableStart, $tableStart)
+                $end = $doc.Range($tableEnd, $tableEnd)
+                $startPage = $start.Information(3)
+                $endPage = $end.Information(3)
                 $heading = ($table.Cell(1,1).Range.Text -replace '[\r\a]', ' ').Trim()
                 if ($heading -eq 'Done') {
                     $summaryCount++
-                    if ($start.Information(3) -le $lastOrderPage) { throw 'The product picking summary must start on a new page.' }
-                    foreach ($row in $table.Rows) {
-                        $rowStart = $doc.Range($row.Range.Start, $row.Range.Start)
-                        $rowEnd = $doc.Range($row.Range.End - 1, $row.Range.End - 1)
-                        if ($rowStart.Information(3) -ne $rowEnd.Information(3)) { throw 'A product summary row is too large to fit on one A4 page.' }
+                    if ($startPage -le $lastOrderPage) { throw 'The product picking summary must start on a new page.' }
+                    # A summary wholly on one page also proves all its rows stay together.
+                    # Multi-page summaries still receive the original per-row checks.
+                    if ($startPage -ne $endPage) {
+                        foreach ($row in $table.Rows) {
+                            $rowRange = $row.Range
+                            $rowStartPosition = $rowRange.Start
+                            $rowEndPosition = $rowRange.End - 1
+                            $rowStart = $doc.Range($rowStartPosition, $rowStartPosition)
+                            $rowEnd = $doc.Range($rowEndPosition, $rowEndPosition)
+                            if ($rowStart.Information(3) -ne $rowEnd.Information(3)) { throw 'A product summary row is too large to fit on one A4 page.' }
+                        }
                     }
                     continue
                 }
                 if ($heading -notmatch '^Order (ID|Number):' -or $summaryCount -ne 0) { throw 'Unexpected table in packing document.' }
                 $orderCount++
-                $lastOrderPage = $end.Information(3)
-                if ($start.Information(3) -ne $end.Information(3)) {
+                $lastOrderPage = $endPage
+                if ($startPage -ne $endPage) {
                     throw "An order is too large to fit together on one A4 page: $heading. Review this order before printing."
                 }
             }

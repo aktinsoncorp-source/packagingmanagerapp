@@ -192,3 +192,30 @@ Fully processed rows say Process again, regardless of surviving file formats. Re
 missing-output and partially covered statuses remain meaningful. Order and summary
 product cells now use uniform F2F2F2 shading. Platform header and summary-total colors
 are retained. The new layout affects future exports; existing files are unchanged.
+
+## Focused workflow update (version 1.10)
+
+The repeat decision now sends repeat_action=skip for No, include for the continuation
+link, and cancels on closing X. The existing selection-bound repeat token and fresh
+source validation still apply to both decisions. Filtering uses surviving, current
+output fingerprints; deleting every output copy makes the order eligible again.
+An unprocessed order shared between PDFs remains printed once. Explicitly reviewed
+changed orders are eligible when their fingerprint differs. Revision removals compare
+the full original batch, so filtering an unchanged order does not falsely remove it.
+If filtering leaves no orders, no document or new completion record is written.
+
+Rows alternate FFFFFF/F2F2F2, starting with white within each order and each summary.
+Platform headers/totals retain their colors. Lock controls share the same top margin
+and size, with reference-style GDI outline padlocks and no circles/keyholes. Lock and
+Excel state handling are unchanged. The warning omits the requested extra sentence.
+
+verify_word.ps1 caches range/page values and disables painting in its owned Word
+instance. A summary proven wholly on one page needs no separate row-boundary COM
+calls; multi-page summaries still check every row. Source hashing, document content,
+quantities, order tables, A4 and page-break validation remain in place.
+
+Current checks: 105 regressions; qa/release110_smoke.py for actual packaged No/mixed,
+No/all-processed and intentional reprint behavior; NameLocksSmoke.cs for aligned icons
+and lock/unlock behavior; ExportDialogsSmoke.cs for default No, continuation and X.
+qa/release110_performance.py compares old/new Word validation on identical documents;
+its baseline files and copied private fixtures are local QA inputs, excluded from Git.
