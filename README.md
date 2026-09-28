@@ -2,7 +2,7 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.8.0**.
+Current engine version: **1.9.0**.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -64,7 +64,7 @@ The 16 synthetic regeneration tests require no production PDFs or Microsoft Word
 & .\.venv\Scripts\python.exe -m unittest discover -s .\PackingListApp\qa -p test_regeneration.py -v
 ```
 
-The full suite contains 96 tests. Several tests and development
+The full suite contains 97 tests. Several tests and development
 helpers require the private September 24-26 source PDFs and approved Word files
 at their original dated paths. Those fixtures and generated QA reports are not
 distributed in Git. Restore them separately before running the full suite.
@@ -76,7 +76,7 @@ A Git bundle is a portable copy of committed repository history. To restore a
 provided bundle into a new folder:
 
 ```powershell
-git clone "Git/v1.8.0/PackingListManager-1.8.0.bundle" "PackingListManager-Restored"
+git clone "Git/v1.9.0/PackingListManager-1.9.0.bundle" "PackingListManager-Restored"
 ```
 
 This restores the tracked program files. It does not restore the installed
@@ -128,4 +128,12 @@ controls. Checked-PDF totals update below the main list, without double counting
 matching orders. Main step numbers are removed and printed Done boxes use five spaces.
 Local checkpoint: `Git/v1.8.0`.
 
-Processed status identifies PDF, Word, or PDF + Word from surviving current outputs.
+Version 1.8 identified output formats in Status; version 1.9 replaces that label with Process again.
+
+## Version 1.9 - PDF-only generation and simpler reprints
+
+Generate now exports PDF directly, with no format selector. Completed rows show
+Process again. The repeat warning has a large centered No button and small gray
+borderless continuation text beneath it. Product rows use light gray shading;
+SPX/FLASH retain peach headers and Lazada/TikTok retain blue headers. Existing Word
+outputs remain available in history and count toward numbering. Checkpoint: `Git/v1.9.0`.

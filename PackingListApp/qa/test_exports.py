@@ -97,23 +97,29 @@ class ExportTests(unittest.TestCase):
 
     def test_status_tracks_pdf_word_both_and_deleted_files(self):
         self.source('a.pdf',['A']);pdf=self.make()
-        self.assertEqual(self.scan()['entries'][0]['message'],'Processed — PDF')
-        word=self.make('docx');self.assertEqual(self.scan()['entries'][0]['message'],'Processed — PDF + Word')
-        Path(pdf['path']).unlink();self.assertEqual(self.scan()['entries'][0]['message'],'Processed — Word')
+        self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
+        word=self.make('docx');self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
+        Path(pdf['path']).unlink();self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
         Path(word['path']).unlink();self.assertEqual(self.scan()['entries'][0]['status'],'MISSING')
         self.assertEqual(self.scan()['entries'][0]['output_formats'],[])
     def test_old_word_record_without_format_field_is_recognized(self):
         self.source('a.pdf',['A']);word=self.make('docx');history=self.history()
         history['outputs'][word['filename']].pop('format')
         engine.atomic_json(self.folder/'000 Output'/engine.HISTORY,history)
-        self.assertEqual(self.scan()['entries'][0]['message'],'Processed — Word')
+        self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
     def test_superseded_pdf_does_not_count_as_current_word_format(self):
         self.source('a.pdf',['A']);pdf=self.make();self.source('a.pdf',['A'],quantity=3)
         selected=self.selected();selected[0]['revision']=True
         generate_approved(self.folder,selected,verifier=layout,output_format='docx')
         self.assertTrue(Path(pdf['path']).exists())
-        self.assertEqual(self.scan()['entries'][0]['message'],'Processed — Word')
+        self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
     def test_partial_format_coverage_is_labelled_as_some_orders(self):
         self.source('a.pdf',['A']);self.make('docx');self.source('b.pdf',['A','B'])
         entry=next(e for e in self.scan()['entries'] if e['path'].endswith('b.pdf'))
-        self.assertEqual(entry['status'],'READY');self.assertIn('Some orders: Word',entry['message'])
+        self.assertEqual(entry['status'],'READY');self.assertIn('Some orders already processed',entry['message'])
+
+    def test_public_generate_rejects_word_export(self):
+        with patch.object(engine,'generate') as generate:
+            with self.assertRaisesRegex(PackingError,'PDF only'):
+                engine.handle({'action':'generate','folder':str(self.folder),'selected':[],'output_format':'docx'})
+            generate.assert_not_called()

@@ -1,12 +1,13 @@
-# Packing List Manager 1.8.0 handover
+# Packing List Manager 1.9.0 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.8.0. The preceding installed 1.7.0 release,
-including its private catalog, is preserved in PackingListApp/qa/previous-release-1.7.0.
+The executable and engine are version 1.9.0. The preceding installed 1.8.0 release,
+including its private catalog, is preserved in PackingListApp/qa/previous-release-1.8.0.
+The 1.7.0 backup remains in PackingListApp/qa/previous-release-1.7.0.
 The 1.6.1 backup remains in PackingListApp/qa/previous-release-1.6.1.
 The 1.6.0 backup remains in PackingListApp/qa/previous-release-1.6.0.
 The version 1.5 backup remains in qa/previous-release-1.5.0.
@@ -209,6 +210,42 @@ Verification September 28:
 - Installed files match the final staged release: 297 engine files plus executable,
   icon and guide. ProductNames.json, its backup and Settings.json were preserved.
   Report: qa/release-1.8-installation.json. Local checkpoint: Git/v1.8.0.
+
+## Version 1.9 PDF-only generation and neutral product rows
+
+- Generate directly exports PDF with no format-choice dialog. The public engine also
+  rejects Word requests. Desktop Word still performs internal A4 pagination and PDF
+  export; temporary Word files are not published. Historical Word files remain valid
+  for processing history, missing-output coverage and shared suffix numbering.
+- Fully processed source rows show Process again, regardless of historical format.
+  Partial coverage and review/missing-output warnings retain useful status messages.
+- Repeated-orders warning has a large centered blue No button. No is focused and is
+  the Enter/Escape default. Below it, smaller light-gray borderless text reads exactly
+  Continue to Generate the Repeated Orders. Its width matches the No button.
+- Every product row in order tables and picking summaries has F2F2F2 light-gray fill.
+  Peach SPX/FLASH and blue Lazada/TikTok headers and summary totals are preserved.
+- Employee Guide.txt explains the current workflow. Versions 1.8 and older above are
+  historical; their format-choice and format-specific Status behavior is superseded.
+
+Verification September 28:
+- All 97 regression tests passed: qa/release-1.9-tests.log.
+- Real warning-dialog checks passed: centered and enlarged No, default cancellation,
+  smaller borderless continuation link within its width, and explicit continuation.
+  Evidence: qa/release19-controls/dialogs-ok.txt and repeat-warning.png.
+- Packaged engine generated three PDF-only outputs from all four platforms (17 orders,
+  30 pieces), then confirmed a repeated SPX generation as _2.pdf. Word export requests
+  were rejected. All four processed sources displayed Process again on rescan.
+- All six initial A4 PDF pages were rendered and visually reviewed. Confirmed the
+  gray product rows and colored headers, 38 wider boxes, and separate summary pages.
+  The PDF inspection checks DeviceGray as well as RGB fills; 650 gray rectangles found.
+  Report: qa/release-1.9-verification.json. The script resumed the same isolated run
+  after correcting its color-inspection assumption and resumed-output path handling.
+- Packaged main UI checks passed for per-file couriers, manual/check-all selection,
+  and dynamic platform totals. Main screenshot: qa/release19-dqtgf_9i/main.png.
+- Installation verified all 297 engine files plus executable, icon and employee guide
+  against the tested candidate. ProductNames.json, its backup and Settings.json were
+  unchanged. Report: qa/release-1.9-installation.json. Production documents were not
+  regenerated. Source/history checkpoint: Git/v1.9.0; earlier versions are preserved.
 
 ## Maintenance
 

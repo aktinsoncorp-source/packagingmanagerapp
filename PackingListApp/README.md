@@ -173,3 +173,22 @@ Processed status reports PDF, Word or PDF + Word from surviving nonsuperseded ou
 matching current order fingerprints. Older Word records need no format field because
 the extension identifies them. Deletions remove formats on rescan. Partial coverage is
 labelled Some orders. Ignored changed-file status reports the retained earlier format.
+
+## PDF-only update (version 1.9)
+
+The Windows Generate action directly requests PDF. ExportOptions was removed.
+The packaged engine's generate request rejects any output_format other than pdf,
+including docx. The internal Python helper still supports Word to construct historical
+fixtures and verify backward-compatible output history; it is not an employee export
+option. Earlier Word-specific smoke scripts target version 1.8 or older. Use
+qa/release19_smoke.py for current packaged checks.
+
+RepeatWarning centers a 330 x 54 No button and keeps it as AcceptButton/CancelButton.
+A smaller gray LinkLabel below it says Continue to Generate the Repeated Orders,
+with no border or underline and no greater width than No. Clicking that link explicitly
+approves; the warning token protocol and repeat detection are unchanged.
+
+Fully processed rows say Process again, regardless of surviving file formats. Review,
+missing-output and partially covered statuses remain meaningful. Order and summary
+product cells now use uniform F2F2F2 shading. Platform header and summary-total colors
+are retained. The new layout affects future exports; existing files are unchanged.

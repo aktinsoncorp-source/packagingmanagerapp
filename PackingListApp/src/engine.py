@@ -21,7 +21,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.8.0'
+VERSION = '1.9.0'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'
@@ -456,11 +456,11 @@ def scan_internal(folder):
                         prior_lines.append(f"  {item['pieces']} pcs | {item['product']} | {item['variation']}")
             old_text = '\r\n'.join(prior_lines) or 'An earlier source file is recorded in the processing log.'
         elif ignored and changed_orders:
-            status, message = 'DONE', 'Earlier output kept' + (' — ' + format_label if format_label else '') + '. Review this changed PDF to generate its current contents.'
+            status, message = 'DONE', 'Earlier output kept. Review this changed PDF to generate its current contents.'
         elif fresh and (missing_outputs or any(o.key in prior for o in fresh) or (source and source.get('legacy_missing'))):
             status, message = 'MISSING', f'Output missing — {len(fresh)} orders without a PDF or Word file; ready to generate again'
         elif source and source.get('sha256') == batch.sha256 and not uncovered:
-            status, message = 'DONE', ('Processed — ' + format_label) if format_label else 'Earlier processing recorded — no current output'
+            status, message = 'DONE', 'Process again' if format_label else 'Earlier processing recorded — no current output'
         elif fresh:
             status, message = 'READY', f'{len(fresh)} new orders ready'
             skipped = len(batch.orders) - len(fresh)
@@ -468,9 +468,9 @@ def scan_internal(folder):
         else:
             status, message = 'DUPLICATE', 'Repeated orders — select to generate again'
         if status == 'DUPLICATE' and not uncovered and format_label:
-            message = 'Processed — ' + format_label + ' (repeated orders)'
+            message = 'Process again'
         elif status in ('READY', 'MISSING', 'DUPLICATE') and format_label:
-            message += ' | Some orders: ' + format_label
+            message += ' | Some orders already processed'
         if status in ('READY','MISSING','DONE','DUPLICATE'):
             for o in batch.orders:
                 seen.setdefault(o.key, key)
@@ -650,7 +650,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                     new_history['sources'][key] = {'sha256': original.sha256, 'platform': original.platform,
                                                   'order_keys': [o.key for o in original.orders],
                                                   'outputs': sorted(set(history['sources'].get(key, {}).get('outputs', [])) | {name}),
-                                                  'note': 'Completed revision' if mode=='revision' else 'Processed — select to generate again', 'created': when}
+                                                  'note': 'Completed revision' if mode=='revision' else 'Process again', 'created': when}
                 for old_name, replaced_keys in replaced.items():
                     old = new_history['outputs'].get(old_name)
                     if old:
@@ -693,7 +693,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                                   if any(s['path'] == key for s in output.get('sources', []))]
                 new_history['sources'][key] = {'sha256': batch.sha256, 'platform': batch.platform,
                                               'order_keys': [o.key for o in batch.orders], 'outputs': linked_outputs,
-                                              'note': 'Processed — select to generate again', 'created': when}
+                                              'note': 'Process again', 'created': when}
             for key, source in new_history['sources'].items():
                 source['outputs'] = [name for name, output in new_history['outputs'].items()
                                      if any(s['path'] == key for s in output.get('sources', []))]
@@ -782,7 +782,10 @@ def handle(request):
     folder = dated_folder(request['folder'])
     if action == 'courier': return set_courier(folder, request['selected'], request['carrier'])
     if action == 'scan': return scan(folder, catalog_path)
-    if action == 'generate': return generate(folder, request['selected'], catalog_path=catalog_path, output_format=request.get('output_format', 'pdf'), repeat_confirmation=request.get('repeat_confirmation'))
+    if action == 'generate':
+        if request.get('output_format', 'pdf') != 'pdf':
+            raise PackingError('Packing List Manager exports PDF only.')
+        return generate(folder, request['selected'], catalog_path=catalog_path, output_format='pdf', repeat_confirmation=request.get('repeat_confirmation'))
     if action == 'import': return import_pdfs(folder, request['files'], request.get('carrier'))
     if action == 'acknowledge': return acknowledge(folder, request['selected'])
     raise PackingError('Unknown action.')

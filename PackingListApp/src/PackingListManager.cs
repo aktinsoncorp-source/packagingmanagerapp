@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.8.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.8.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.9.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.9.0.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -67,7 +67,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.8";
+            Text = "Packing List Manager 1.9";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -529,13 +529,8 @@ namespace PackingListManager {
             }
             if(selected.Count==0)return;
             try {
-                string format;
-                using(var options=PackingDialogs.ExportOptions()) {
-                    if(options.ShowDialog(this)!=DialogResult.OK)return;
-                    format=((RadioButton)options.Controls.Find("exportPdf",true)[0]).Checked?"pdf":"docx";
-                }
-                var request=new Dictionary<string,object>{{"action","generate"},{"selected",selected},{"output_format",format}};
-                var result=await Call(request,"Preparing "+(format=="pdf"?"PDF":"Word")+" packing lists and checking A4 pagination. Please wait...");
+                var request=new Dictionary<string,object>{{"action","generate"},{"selected",selected}};
+                var result=await Call(request,"Preparing PDF packing lists and checking A4 pagination. Please wait...");
                 while(B(result,"confirmation_required")) {
                     using(var warning=PackingDialogs.RepeatWarning(N(result,"repeat_count"))) {
                         if(warning.ShowDialog(this)!=DialogResult.Yes){status.Text="Generation cancelled. No documents created.";return;}

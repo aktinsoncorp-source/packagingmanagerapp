@@ -1,5 +1,5 @@
 PACKING LIST MANAGER
-Employee guide - version 1.8.0
+Employee guide - version 1.9.0
 Help updated September 28, 2026
 
 Start
@@ -130,37 +130,38 @@ Daily steps
    Files with errors, no identified courier, or awaiting changed-file review
    are excluded until resolved. Check the Platform and Courier columns.
    To view a file's contents, select its row and click Open selected PDF.
-4. Click Generate Packing Lists. Choose PDF (the default) or Word (.docx),
-   then click Generate. The format starts at PDF each time you open this choice.
-   Microsoft Word checks A4 layout for both formats and creates the PDF export.
-   Only your chosen format is saved into 000 Output and Completed documents.
-5. If a repeat warning appears, No is selected by default. Enter, Escape or
-   closing the warning cancels. Click the smaller Yes button only when you
-   intend to generate those orders again. No creates no completed documents.
-6. Open and print the PDF in your PDF viewer, or open the Word file in Word.
-   Use A4 paper.
+4. Click Generate Packing Lists. The program exports PDF directly; there is no
+   format selection. Microsoft Word checks A4 layout and creates the PDF export.
+   Only the finished PDF is saved into 000 Output and Completed documents.
+5. If a repeat warning appears, the large centered No button is selected by
+   default. Enter, Escape or closing the warning cancels. To deliberately generate
+   those orders again, click the small gray text below No:
+   Continue to Generate the Repeated Orders
+   That text has no button border. Choosing No creates no completed documents.
+6. Open and print the generated PDF in your PDF viewer. Use A4 paper.
 
 What is generated
-- One document in your chosen format for SPX and one for FLASH, with orange tables.
-- One combined document for Lazada and TikTok, using blue tables and
-  separate platform labels. A batch containing only one of these platforms
+- One PDF for SPX and one for FLASH, with orange order headers and light peach
+  column headers. Product rows are light gray.
+- One combined PDF for Lazada and TikTok, using blue order/column headers,
+  light gray product rows and separate platform labels. A batch containing only one of these platforms
   still uses the LAZADA_TIKTOK filename sequence.
 - All files go in the selected dated folder's 000 Output folder.
-- Each group uses the next suffix: _1, _2, _3, and so on, followed by .pdf or .docx.
-  PDF and Word share one sequence: _1.pdf followed by a Word export gives _2.docx.
+- Each group uses the next suffix: _1.pdf, _2.pdf, _3.pdf, and so on.
+  Existing PDFs and older Word outputs both count toward the next number.
+  For example, an existing _1.docx is followed by a newly generated _2.pdf.
 - Output suffixes are assigned by the program independently of the numbers
   in source PDF filenames. Keep the generated output and history filenames.
 - The source PDF batches stay grouped. Each order has one bordered table,
   Employee, Number and Time writing lines, product check boxes [     ], variation
   and pieces. Picking-summary Done boxes have the same wider writing space.
 
-Processed format in Status
-Processed rows show Processed - PDF, Processed - Word, or Processed - PDF + Word.
-The formats refer to completed files that still exist and contain the current order
-versions. Scan again after deleting a file: the status drops the missing format, or
-shows Output missing when no current output remains. Earlier superseded revisions
-are excluded. If only some orders have an output, the status says Some orders and
-shows the available format. Processed rows remain selectable for another generation.
+Processed status
+Completed rows show Process again. Tick Use and click Generate Packing Lists if
+you need another PDF. The repeat warning will ask before creating another copy.
+The status no longer lists PDF/Word formats. Scan again after deleting an output:
+if no current output covers the orders, it shows Output missing. Older Word outputs
+remain recognized in Completed documents and processing history.
 
 Selected totals
 Below the PDF list, Selected shows the number of checked PDFs, orders and pieces.
@@ -177,15 +178,17 @@ Previously generated orders still trigger the warning if their output was delete
 The warning says:
 Warning: There are orders in this packing list that has repeated. Do you wish to
 continue and generate the repeating orders again?
-No is the larger, highlighted default. Yes is smaller. Choose Yes only for an
-intentional reprint or revised batch. The program checks again after confirmation
+No is large, centered and highlighted. The smaller gray continuation text is
+centered underneath, within the width of No, and has no box. Click that text only
+for an intentional reprint or revised batch. The program checks again after confirmation
 if the selection has changed. Identical overlapping orders print once per run.
 History checks are per dated folder; they do not search other dates or computers.
 
 Product picking summary
 Every generated document ends with a Product Picking Summary on a new page.
 It lists the product, variation or size, and total pieces needed from inventory.
-Each summary covers ONLY the orders in that document. Later batches get their
+Product rows use light gray shading, with the platform-colored column header
+and total row retained. Each summary covers ONLY the orders in that document. Later batches get their
 own summaries covering the PDFs selected for that run. Regenerating a PDF
 also includes its orders again in that new document and summary.
 The packing tables and picking summary use the names saved in Define Name.
@@ -211,8 +214,8 @@ you can still tick it to generate another copy.
 
 Generating or printing an earlier batch again
 To make another copy, tick Use beside any processed PDF and click
-Generate Packing Lists. Choose PDF or Word and confirm the repeat warning only
-when a new copy is intended. You can combine it with other selected PDFs.
+Generate Packing Lists. Confirm the repeat warning through the gray continuation
+text only when a new PDF copy is intended. You can combine it with other selected PDFs.
 Each platform uses one more than its highest PDF or Word filename number still in
 000 Output. Existing files are never overwritten.
 Examples for one platform:
