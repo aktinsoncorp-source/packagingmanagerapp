@@ -22,6 +22,13 @@ exe = ROOT / 'Packing List Manager/App Files/PackingEngine.exe'
 
 
 def call(action, **kwargs):
+    result = _call(action, **kwargs)
+    if action == 'generate' and result.get('confirmation_required'):
+        result = _call(action, **kwargs, repeat_confirmation=result['repeat_token'])
+    return result
+
+
+def _call(action, **kwargs):
     request, response = work / 'request.json', work / 'response.json'
     request.write_text(json.dumps({'action': action, 'folder': str(folder), **kwargs}), encoding='utf-8')
     response.unlink(missing_ok=True)
@@ -34,7 +41,7 @@ def call(action, **kwargs):
 
 def generate():
     e = call('scan')['entries'][0]
-    result = call('generate', selected=[{'path': e['path'], 'sha256': e['sha256']}])
+    result = call('generate', output_format='docx', selected=[{'path': e['path'], 'sha256': e['sha256']}])
     output = result['outputs'][0]
     records = read_completed_doc(Path(output['path']), 'SPX')
     assert {o.key: o.fingerprint() for o in batch.orders} == {k: v['fingerprint'] for k, v in records.items()}

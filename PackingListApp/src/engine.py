@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 import argparse
 import copy
+import hashlib
 import json
 import os
 import re
@@ -20,7 +21,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.7.0'
+VERSION = '1.8.0'
 HISTORY = 'Processing_History.json'
 LOG = 'Processed_Files.txt'
 JOURNAL = '.packing-transaction.json'
@@ -181,7 +182,7 @@ def load_history(folder, batches):
             raise PackingError(f'Processing_History.json cannot be read ({exc}). Restore its backup before processing more orders.') from exc
     h = {'schema': 1, 'date': folder.name, 'sources': {}, 'orders': {}, 'outputs': {}, 'legacy': False}
     log_path = out / LOG
-    docs = list(out.glob('*_Packing_Checklist_*.docx')) if out.exists() else []
+    docs = [p for p in out.glob('*_Packing_Checklist_*') if p.suffix.lower() in ('.docx', '.pdf')] if out.exists() else []
     if not log_path.exists():
         if docs:
             raise PackingError('Completed packing documents exist, but Processed_Files.txt is missing. Restore the log before making another batch.')
@@ -229,7 +230,7 @@ def load_history(folder, batches):
                              'platform': batch.platform, 'order_keys': [o.key for o in batch.orders],
                              'outputs': sorted(name for name, output in h['outputs'].items() if any(s['path'] == key for s in output['sources'])),
                              'legacy_missing': missing_only,
-                             'note': 'Earlier Word output missing; regenerate from the current PDF' if missing_only else
+                             'note': 'Earlier output document missing; regenerate from the current PDF' if missing_only else
                                      ('Verified against earlier completed documents' if same else 'Earlier source differs from completed documents')}
     for key in recorded_paths - batches.keys():
         h['sources'][key] = {'sha256': None, 'order_keys': [], 'outputs': [], 'note': 'Source named in earlier processing log'}
@@ -289,7 +290,7 @@ def completed_outputs(folder, history):
                 included.append(copy.deepcopy(order) if order else {'order_id': key.split(':', 1)[-1], 'items': [], 'details_available': False})
             sources.append({'path': source['path'], 'orders': included,
                             'pieces': sum(i['pieces'] for order in included for i in order['items'])})
-        match = re.search(r'_(\d+)\.docx$', name, re.I)
+        match = re.search(r'_(\d+)\.(?:docx|pdf)$', name, re.I)
         result.append({'filename': name, 'group': output['group'], 'sequence': int(match[1]) if match else 0,
                        'status': output['status'], 'exists': True, 'created': output.get('created', ''),
                        'order_count': len(output['orders']), 'pieces': sum(i['pieces'] for o in snapshots.values() for i in o['items']),
@@ -298,14 +299,14 @@ def completed_outputs(folder, history):
     return sorted(result, key=lambda o: (platform_order.get(o['group'], 4), o['sequence'], o['filename']))
 
 
-def next_output_filename(out, group, date, reserved=()):
+def next_output_filename(out, group, date, reserved=(), output_format='docx'):
     prefix = f'{group}_Packing_Checklist_{datetime.strptime(date,"%Y%m%d"):%Y-%m-%d}_'
     numbers = []
-    for name in [p.name for p in out.glob('*.docx') if p.is_file()] + list(reserved):
-        match = re.fullmatch(re.escape(prefix) + r'(\d+)\.docx', name, re.I)
+    for name in [p.name for p in out.iterdir() if p.is_file() and p.suffix.lower() in ('.docx', '.pdf')] + list(reserved):
+        match = re.fullmatch(re.escape(prefix) + r'(\d+)\.(?:docx|pdf)', name, re.I)
         if match:
             numbers.append(int(match[1]))
-    return f'{prefix}{max(numbers, default=0)+1}.docx'
+    return f'{prefix}{max(numbers, default=0)+1}.{output_format}'
 
 
 def available_order_outputs(folder, history):
@@ -432,6 +433,12 @@ def scan_internal(folder):
                              or any(s['path'] == key for s in output.get('sources', [])))
         missing_outputs = [name for name in old_outputs if not safe_child(folder / '000 Output', name).is_file()]
         ignored = bool(source and source.get('ignored_changes') and source.get('sha256') == batch.sha256)
+        current_outputs = set()
+        for order in batch.orders:
+            fingerprint = prior.get(order.key, {}).get('fingerprint', order.fingerprint()) if ignored else order.fingerprint()
+            current_outputs.update(available.get((order.key, fingerprint), []))
+        output_formats = [fmt for fmt in ('pdf', 'docx') if any(Path(name).suffix.lower() == '.' + fmt for name in current_outputs)]
+        format_label = ' + '.join('PDF' if fmt == 'pdf' else 'Word' for fmt in output_formats)
         old_text = None
         if batch.platform == 'SHOPEE':
             status, message = 'COURIER', 'Choose SPX or FLASH in Courier; Auto found no unique courier label in the filename or folder.'
@@ -449,23 +456,29 @@ def scan_internal(folder):
                         prior_lines.append(f"  {item['pieces']} pcs | {item['product']} | {item['variation']}")
             old_text = '\r\n'.join(prior_lines) or 'An earlier source file is recorded in the processing log.'
         elif ignored and changed_orders:
-            status, message = 'DONE', 'Earlier output kept. Review this changed PDF to generate its current contents.'
+            status, message = 'DONE', 'Earlier output kept' + (' — ' + format_label if format_label else '') + '. Review this changed PDF to generate its current contents.'
         elif fresh and (missing_outputs or any(o.key in prior for o in fresh) or (source and source.get('legacy_missing'))):
-            status, message = 'MISSING', f'Output missing — {len(fresh)} orders without a Word file; ready to generate again'
+            status, message = 'MISSING', f'Output missing — {len(fresh)} orders without a PDF or Word file; ready to generate again'
         elif source and source.get('sha256') == batch.sha256 and not uncovered:
-            status, message = 'DONE', 'Processed — select to generate again'
+            status, message = 'DONE', ('Processed — ' + format_label) if format_label else 'Earlier processing recorded — no current output'
         elif fresh:
             status, message = 'READY', f'{len(fresh)} new orders ready'
             skipped = len(batch.orders) - len(fresh)
             if skipped: message += f'; {skipped} other orders also included if selected'
         else:
             status, message = 'DUPLICATE', 'Repeated orders — select to generate again'
+        if status == 'DUPLICATE' and not uncovered and format_label:
+            message = 'Processed — ' + format_label + ' (repeated orders)'
+        elif status in ('READY', 'MISSING', 'DUPLICATE') and format_label:
+            message += ' | Some orders: ' + format_label
         if status in ('READY','MISSING','DONE','DUPLICATE'):
             for o in batch.orders:
                 seen.setdefault(o.key, key)
-        links = '\r\n'.join(('MISSING: ' if name in missing_outputs else 'Word output: ') + name for name in old_outputs)
+        links = '\r\n'.join(('MISSING: ' if name in missing_outputs else 'output document: ') + name for name in old_outputs)
         entries.append({'path': key, 'platform': batch.platform, 'is_shopee': batch.platform in ('SHOPEE', 'SPX', 'FLASH'),
                         'courier': modes.get(key, 'Auto'), 'status': status, 'message': message,
+                        'order_totals': [{'key': o.key, 'pieces': o.pieces} for o in batch.orders],
+                        'output_formats': output_formats,
                         'details': (links + '\r\n\r\n' if links else '') + batch_details(batch, old_text), 'orders': len(batch.orders),
                         'pieces': batch.pieces, 'new_orders': len(fresh) if status == 'READY' else 0,
                         'missing_orders': len(fresh) if status == 'MISSING' else 0,
@@ -481,7 +494,7 @@ def scan(folder, catalog_path=None):
             recover(out)
             entries, batches, history = scan_internal(folder)
             # Save associations while legacy documents still exist, so a later
-            # deletion never destroys the PDF-to-Word mapping.
+            # deletion never destroys the PDF-to-output mapping.
             if history['outputs'] and (not (out / HISTORY).exists() or
                     json.loads((out / HISTORY).read_text(encoding='utf-8')) != history):
                 atomic_json(out / HISTORY, history)
@@ -494,14 +507,35 @@ def scan(folder, catalog_path=None):
             'outputs': completed_outputs(folder, history), 'version': VERSION}
 
 
-def generate(folder, selected, verifier=verify_word, catalog_path=None):
+def repeat_warning(selected, batches, history, output_format):
+    selected_keys = {o.key for s in selected for o in batches[s['path'].replace('\\', '/')].orders}
+    recorded = set(history['orders'])
+    for source in history['sources'].values():
+        recorded.update(source.get('order_keys', []))
+    occurrences = defaultdict(int)
+    for batch in batches.values():
+        for order in batch.orders:
+            occurrences[order.key] += 1
+    previous = sorted(selected_keys & recorded)
+    overlapping = sorted(k for k in selected_keys if occurrences[k] > 1)
+    repeated = sorted(set(previous) | set(overlapping))
+    payload = {'selected': selected, 'repeated': repeated, 'previous': previous,
+               'overlapping': overlapping, 'format': output_format}
+    token = hashlib.sha256(json.dumps(payload, sort_keys=True).encode('utf-8')).hexdigest()
+    return {'ok': True, 'confirmation_required': True, 'repeat_count': len(repeated),
+            'previously_generated': len(previous), 'overlapping_orders': len(overlapping),
+            'repeat_token': token}
+
+
+def generate(folder, selected, verifier=verify_word, catalog_path=None, output_format='docx', repeat_confirmation=None):
+    if output_format not in ('pdf', 'docx'):
+        raise PackingError('Choose PDF or Word output.')
     if not selected:
         raise PackingError('Select at least one PDF to generate.')
     with folder_lock(folder) as out:
         recover(out)
         entries, batches, history = scan_internal(folder)
         from names import encounter, apply_names
-        catalog = encounter(catalog_path, batches.values()) if catalog_path is not None else {'revision': 0, 'rows': []}
         entry_map = {e['path']: e for e in entries}
         chosen, seen = [], set()
         modes, skipped = {}, {}
@@ -531,6 +565,10 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None):
                 modes[key] = 'revision' if revision else 'standard'
         if not chosen:
             raise PackingError('No readable orders remain in the selected PDFs.')
+        warning = repeat_warning(selected, batches, history, output_format)
+        if warning['repeat_count'] and repeat_confirmation != warning['repeat_token']:
+            return warning
+        catalog = encounter(catalog_path, batches.values()) if catalog_path is not None else {'revision': 0, 'rows': []}
         grouped = defaultdict(list)
         for key, batch in chosen:
             # Revisions have a distinct file from genuinely new orders.
@@ -544,26 +582,38 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None):
                 if mode == 'standard':
                     mode = 'regenerated' if any(entry_map[key]['status'] == 'MISSING' or any(o.key in history['orders'] for o in batch.orders)
                                                 for key, batch in values) else 'new'
-                filename = next_output_filename(out, group, folder.name, reserved)
+                filename = next_output_filename(out, group, folder.name, reserved, output_format)
                 reserved.add(filename)
                 dest = stage / filename
                 selected_batches = apply_names([batch for _, batch in values], catalog) if catalog_path is not None else [batch for _, batch in values]
-                build_document(selected_batches, group, folder.name, dest, revision=(mode=='revision'))
+                build_dest = dest.with_suffix('.docx')
+                build_document(selected_batches, group, folder.name, build_dest, revision=(mode=='revision'))
                 plans.append({'filename': filename, 'group': group, 'mode': mode, 'values': values, 'dest': dest,
-                              'display_batches': selected_batches})
-            verification = verifier([p['dest'] for p in plans])
-            page_counts = {Path(v['path']).name: v['pages'] for v in verification}
+                              'display_batches': selected_batches, 'build_dest': build_dest})
+            paths = [p['build_dest'] for p in plans]
+            verification = verifier(paths, export_pdf=True) if output_format == 'pdf' else verifier(paths)
+            page_counts = {Path(v['path']).with_suffix('.' + output_format).name: v['pages'] for v in verification}
+            if output_format == 'pdf':
+                import pdfplumber
+                for plan in plans:
+                    if not plan['dest'].is_file():
+                        raise PackingError('PDF export did not produce a file. No completed batch was recorded.')
+                    with pdfplumber.open(plan['dest']) as pdf:
+                        if not pdf.pages or len(pdf.pages) != page_counts.get(plan['filename']):
+                            raise PackingError('PDF export page count does not match the checked document.')
+                    plan['build_dest'].unlink()
+
             for selection in selected:
                 key = selection['path'].replace('\\','/')
                 if file_hash(batches[key].path) != batches[key].sha256:
                     raise PackingError(f'{key} changed while the documents were generated. Scan again.')
             when = datetime.now().isoformat(timespec='seconds')
             lines = [f'COMPLETED BY PACKING LIST MANAGER {VERSION}', f'Time: {when}',
-                     f'Product name definitions revision: {catalog["revision"]}',
+                     f'Product name definitions revision: {catalog["revision"]}', f'Output format: {output_format.upper()}',
                      'Each selected PDF contributes its orders. Repeated orders within this run appear once.',
                      'Selected PDFs: ' + ', '.join(s['path'] for s in selected)]
             if history.get('legacy'):
-                lines.append('Earlier PDF-to-Word associations retained from the processing log and available documents; source fingerprints saved in Processing_History.json.')
+                lines.append('Earlier PDF-to-document associations retained from the processing log and available documents; source fingerprints saved in Processing_History.json.')
                 new_history['legacy'] = False
             for plan in plans:
                 name, mode, values = plan['filename'], plan['mode'], plan['values']
@@ -620,7 +670,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None):
                     if linked_keys:
                         sources.append({'path': key, 'sha256': batch.sha256, 'order_keys': linked_keys})
                 new_history['outputs'][name] = {'group': plan['group'], 'orders': keys, 'mode': mode, 'created': when,
-                                               'status': 'active', 'pages': page_counts.get(name), 'removed_orders': sorted(removed),
+                                               'status': 'active', 'format': output_format, 'pages': page_counts.get(name), 'removed_orders': sorted(removed),
                                                'order_fingerprints': fingerprints, 'sources': sources, 'record_id': record_id,
                                                'name_catalog_revision': catalog['revision'],
                                                'display_order_snapshots': {o.key: asdict(o) for b in plan['display_batches'] for o in b.orders},
@@ -732,7 +782,7 @@ def handle(request):
     folder = dated_folder(request['folder'])
     if action == 'courier': return set_courier(folder, request['selected'], request['carrier'])
     if action == 'scan': return scan(folder, catalog_path)
-    if action == 'generate': return generate(folder, request['selected'], catalog_path=catalog_path)
+    if action == 'generate': return generate(folder, request['selected'], catalog_path=catalog_path, output_format=request.get('output_format', 'pdf'), repeat_confirmation=request.get('repeat_confirmation'))
     if action == 'import': return import_pdfs(folder, request['files'], request.get('carrier'))
     if action == 'acknowledge': return acknowledge(folder, request['selected'])
     raise PackingError('Unknown action.')

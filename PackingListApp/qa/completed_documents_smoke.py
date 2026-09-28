@@ -42,6 +42,13 @@ exe = ROOT / 'Packing List Manager/App Files/PackingEngine.exe'
 
 
 def call(action, **kwargs):
+    result = _call(action, **kwargs)
+    if action == 'generate' and result.get('confirmation_required'):
+        result = _call(action, **kwargs, repeat_confirmation=result['repeat_token'])
+    return result
+
+
+def _call(action, **kwargs):
     req, resp = work / 'request.json', work / 'response.json'
     req.write_text(json.dumps({'action': action, 'folder': str(folder), **kwargs}))
     resp.unlink(missing_ok=True)
@@ -55,7 +62,7 @@ def call(action, **kwargs):
 def generate(source):
     scan = call('scan')
     entry = next(e for e in scan['entries'] if e['path'] == source)
-    return call('generate', selected=[{'path': source, 'sha256': entry['sha256']}])['outputs'][0]
+    return call('generate', output_format='docx', selected=[{'path': source, 'sha256': entry['sha256']}])['outputs'][0]
 
 
 assert call('scan')['version'] == '1.4.0'

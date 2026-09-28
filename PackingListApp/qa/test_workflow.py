@@ -11,6 +11,7 @@ APP = Path(__file__).resolve().parents[1]
 ROOT = Path(__import__('os').environ.get('PACKING_TEST_DATA', APP.parent))
 sys.path.insert(0, str(APP / 'src'))
 import engine
+from generation_test_support import generate_approved
 from documents import build_document
 from extractors import Batch, Item, Order, PackingError, file_hash, parse_pdf
 from docx import Document
@@ -87,7 +88,7 @@ class PackingTests(unittest.TestCase):
         self.copy_source('20260926_Flash_PL_1.pdf','FLASH')
         self.copy_source('20260926_Lazada_PL_1.pdf','LAZADA & TIKTOK')
         self.copy_source('20260926_Tiktok_PL_1.pdf','LAZADA & TIKTOK')
-        result = engine.generate(self.folder,self.select(),verifier=fake_layout)
+        result = generate_approved(self.folder,self.select(),verifier=fake_layout)
         self.assertEqual(len(result['outputs']),3)
         before = {p['filename']:file_hash(p['path']) for p in result['outputs']}
         combined = Document(self.folder/'000 Output'/'LAZADA_TIKTOK_Packing_Checklist_2026-09-26_1.docx')
@@ -97,7 +98,7 @@ class PackingTests(unittest.TestCase):
         shutil.copyfile(self.folder/'SPX/20260926_SPX_PL_1.pdf',self.folder/'SPX/renamed.pdf')
         states = {e['path']:e['status'] for e in self.entries()}
         self.assertEqual(states['SPX/renamed.pdf'],'DUPLICATE')
-        result = engine.generate(self.folder,self.select(),verifier=fake_layout)
+        result = generate_approved(self.folder,self.select(),verifier=fake_layout)
         self.assertEqual(len(result['outputs']),1)
         self.assertEqual(result['outputs'][0]['filename'],'SPX_Packing_Checklist_2026-09-26_2.docx')
         self.assertEqual(len(Document(result['outputs'][0]['path']).tables),8)
@@ -106,23 +107,23 @@ class PackingTests(unittest.TestCase):
 
     def test_changed_binary_requires_review_and_explicit_ignore(self):
         path = self.copy_source('20260926_SPX_PL_1.pdf')
-        engine.generate(self.folder,self.select(),verifier=fake_layout)
+        generate_approved(self.folder,self.select(),verifier=fake_layout)
         with path.open('ab') as f:f.write(b'\n% revised source metadata\n')
         entry = self.entries()[0]
         self.assertEqual(entry['status'],'REVIEW')
         selected={'path':entry['path'],'sha256':entry['sha256']}
-        with self.assertRaises(PackingError):engine.generate(self.folder,[selected],verifier=fake_layout)
+        with self.assertRaises(PackingError):generate_approved(self.folder,[selected],verifier=fake_layout)
         engine.acknowledge(self.folder,selected)
         self.assertEqual(self.entries()[0]['status'],'DONE')
         self.assertEqual(len(list((self.folder/'000 Output').glob('*.docx'))),1)
 
     def test_reviewed_revision_creates_next_file_and_supersedes_original(self):
         path=self.copy_source('20260926_SPX_PL_1.pdf')
-        first=engine.generate(self.folder,self.select(),verifier=fake_layout)['outputs'][0]
+        first=generate_approved(self.folder,self.select(),verifier=fake_layout)['outputs'][0]
         with path.open('ab') as f:f.write(b'\n% updated export\n')
         entry=self.entries()[0]
         selection={'path':entry['path'],'sha256':entry['sha256'],'revision':True}
-        new=engine.generate(self.folder,[selection],verifier=fake_layout)['outputs'][0]
+        new=generate_approved(self.folder,[selection],verifier=fake_layout)['outputs'][0]
         self.assertTrue(new['filename'].endswith('_2.docx'))
         self.assertIn('REVISION',Document(new['path']).paragraphs[1].text)
         h=json.loads((self.folder/'000 Output'/engine.HISTORY).read_text())
@@ -132,9 +133,9 @@ class PackingTests(unittest.TestCase):
         path=self.copy_source('20260926_SPX_PL_1.pdf')
         selection=self.select()
         with path.open('ab') as f:f.write(b'\n% changed while reviewing\n')
-        with self.assertRaises(PackingError):engine.generate(self.folder,selection,verifier=fake_layout)
+        with self.assertRaises(PackingError):generate_approved(self.folder,selection,verifier=fake_layout)
         def fail(_):raise PackingError('Word unavailable')
-        with self.assertRaises(PackingError):engine.generate(self.folder,self.select(),verifier=fail)
+        with self.assertRaises(PackingError):generate_approved(self.folder,self.select(),verifier=fail)
         out=self.folder/'000 Output'
         self.assertFalse(list(out.glob('*.docx')))
         self.assertFalse((out/engine.HISTORY).exists())
@@ -173,7 +174,7 @@ class PackingTests(unittest.TestCase):
 
     def test_missing_app_history_is_not_silently_recreated(self):
         self.copy_source('20260926_SPX_PL_1.pdf')
-        engine.generate(self.folder,self.select(),verifier=fake_layout)
+        generate_approved(self.folder,self.select(),verifier=fake_layout)
         (self.folder/'000 Output'/engine.HISTORY).unlink()
         with self.assertRaisesRegex(PackingError,'Restore'):self.entries()
 
@@ -186,10 +187,10 @@ class PackingTests(unittest.TestCase):
 
     def test_revision_tracks_orders_removed_from_source(self):
         path=self.copy_source('20260926_SPX_PL_1.pdf')
-        original=engine.generate(self.folder,self.select(),verifier=fake_layout)['outputs'][0]['filename']
+        original=generate_approved(self.folder,self.select(),verifier=fake_layout)['outputs'][0]['filename']
         shutil.copyfile(ROOT/'20260926/SPX/20260926_SPX_PL_4.pdf',path)
         entry=self.entries()[0]
-        result=engine.generate(self.folder,[{'path':entry['path'],'sha256':entry['sha256'],'revision':True}],verifier=fake_layout)
+        result=generate_approved(self.folder,[{'path':entry['path'],'sha256':entry['sha256'],'revision':True}],verifier=fake_layout)
         history=json.loads((self.folder/'000 Output'/engine.HISTORY).read_text())
         self.assertEqual(history['outputs'][original]['status'],'superseded')
         self.assertEqual(len(history['outputs'][result['outputs'][0]['filename']]['removed_orders']),8)

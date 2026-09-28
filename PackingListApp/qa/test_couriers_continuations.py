@@ -14,6 +14,7 @@ APP=Path(__file__).resolve().parents[1]
 ROOT=Path(os.environ.get('PACKING_TEST_DATA',APP/'qa/names-regression-fixtures'))
 sys.path.insert(0,str(APP/'src'))
 import engine
+from generation_test_support import generate_approved
 from extractors import Item,Order,ShopeePart,PackingError,UnsupportedPdf,parse_pdf,combine_shopee_parts,auto_courier
 
 class ContinuationTests(unittest.TestCase):
@@ -58,7 +59,7 @@ class CourierTests(unittest.TestCase):
     def test_unclassified_shopee_visible_with_counts_then_manual_choice_persists(self):
         self.copy();e=self.entry()
         self.assertEqual((e['platform'],e['courier'],e['status'],e['orders'],e['pieces']),('SHOPEE','Auto','COURIER',7,8))
-        with self.assertRaises(PackingError):engine.generate(self.folder,[{'path':e['path'],'sha256':e['sha256']}],verifier=lambda paths:[])
+        with self.assertRaises(PackingError):generate_approved(self.folder,[{'path':e['path'],'sha256':e['sha256']}],verifier=lambda paths:[])
         self.choose('FLASH');e=self.entry()
         self.assertEqual((e['platform'],e['courier'],e['status']),('FLASH','FLASH','READY'))
         self.assertEqual(engine.load_couriers(self.folder)['packing.pdf']['carrier'],'FLASH')
@@ -94,9 +95,9 @@ class CourierTests(unittest.TestCase):
         self.copy();self.choose('FLASH');old=self.entry();self.choose('SPX')
         selected={'path':old['path'],'sha256':old['sha256'],'courier':old['courier'],'platform':old['platform']}
         def layout(paths):return [{'path':str(p),'pages':2} for p in paths]
-        with self.assertRaisesRegex(PackingError,'courier changed'):engine.generate(self.folder,[selected],verifier=layout)
+        with self.assertRaisesRegex(PackingError,'courier changed'):generate_approved(self.folder,[selected],verifier=layout)
         now=self.entry();selected.update(courier=now['courier'],platform=now['platform'])
-        made=engine.generate(self.folder,[selected],verifier=layout)
+        made=generate_approved(self.folder,[selected],verifier=layout)
         self.assertTrue(made['outputs'][0]['filename'].startswith('SPX_'))
         self.assertEqual(self.entry()['status'],'DONE')
     def test_output_folder_pdfs_excluded(self):

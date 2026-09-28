@@ -22,6 +22,13 @@ exe = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / 'Packing List Manager/A
 
 
 def call(action, **kwargs):
+    result = _call(action, **kwargs)
+    if action == 'generate' and result.get('confirmation_required'):
+        result = _call(action, **kwargs, repeat_confirmation=result['repeat_token'])
+    return result
+
+
+def _call(action, **kwargs):
     req, resp = work / 'request.json', work / 'response.json'
     req.write_text(json.dumps({'action': action, 'folder': str(folder), 'catalog_path': str(catalog), **kwargs}), encoding='utf-8')
     resp.unlink(missing_ok=True)
@@ -42,7 +49,7 @@ preview = call('names_prepare', rows=data['rows'])
 saved = call('names_save', rows=preview['rows'], revision=data['revision'], merge_groups=[g['ids'] for g in preview['merges']])
 assert len(saved['rows']) == 1
 assert len(saved['rows'][0]['aliases']) == len(data['rows']) - 1
-result = call('generate', selected=[{'path': e['path'], 'sha256': e['sha256']} for e in scan['entries']])
+result = call('generate', output_format='docx', selected=[{'path': e['path'], 'sha256': e['sha256']} for e in scan['entries']])
 output = Path(result['outputs'][0]['path'])
 doc = Document(output)
 assert len(doc.tables) == 8

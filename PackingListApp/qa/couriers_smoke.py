@@ -29,7 +29,14 @@ assert ui['ok'] and ui['rows']==5 and ui['selectable']==4 and ui['courierChanges
 print(json.dumps({'ui':ui,'work':str(work)}),flush=True)
 folder=work/'generation'/'20260928'
 dest=folder/'SPX'/source.name;dest.parent.mkdir(parents=True);shutil.copyfile(source,dest)
-def call(action,**kwargs):
+def call(action, **kwargs):
+    result = _call(action, **kwargs)
+    if action == 'generate' and result.get('confirmation_required'):
+        result = _call(action, **kwargs, repeat_confirmation=result['repeat_token'])
+    return result
+
+
+def _call(action,**kwargs):
     request=work/'request.json';response=work/'response.json'
     request.write_text(json.dumps({'action':action,'folder':str(folder),'catalog_path':str(work/'ProductNames.json'),**kwargs}),encoding='utf-8')
     response.unlink(missing_ok=True)
@@ -37,7 +44,7 @@ def call(action,**kwargs):
     data=json.loads(response.read_text(encoding='utf-8'));assert data['ok'],data;return data
 scan=call('scan');entry=scan['entries'][0]
 assert len(scan['entries'])==1 and entry['platform']=='SPX' and entry['courier']=='Auto',scan
-result=call('generate',selected=[{'path':entry['path'],'sha256':entry['sha256'],'courier':entry['courier'],'platform':entry['platform']}])
+result=call('generate', output_format='docx',selected=[{'path':entry['path'],'sha256':entry['sha256'],'courier':entry['courier'],'platform':entry['platform']}])
 path=Path(result['outputs'][0]['path'])
 expected=parse_pdf(dest);doc=Document(path)
 assert len(expected.orders)==127 and expected.pieces==300

@@ -13,6 +13,7 @@ from docx import Document
 from openpyxl import load_workbook
 from extractors import Batch, Item, Order, PackingError, file_hash
 import engine
+from generation_test_support import generate_approved
 import names
 from picking import picking_rows
 
@@ -185,7 +186,7 @@ class NameTests(unittest.TestCase):
         with patch.object(engine, 'parse_pdf', return_value=self.batch):
             scan = engine.scan(folder, self.path)
             selection = [{'path': 'SPX/test.pdf', 'sha256': self.batch.sha256}]
-            result = engine.generate(folder, selection, verifier=lambda paths: [{'path': str(p), 'pages': 2} for p in paths], catalog_path=self.path)
+            result = generate_approved(folder, selection, verifier=lambda paths: [{'path': str(p), 'pages': 2} for p in paths], catalog_path=self.path)
             doc = Document(result['outputs'][0]['path'])
             self.assertEqual(doc.tables[0].cell(2, 1).text, 'DISH SOAP')
             self.assertEqual(doc.tables[0].cell(2, 2).text, 'LEMON (1 L)')

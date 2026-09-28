@@ -32,7 +32,14 @@ for platform,batch in smallest.items():
     dest.parent.mkdir(parents=True,exist_ok=True)
     shutil.copyfile(batch.path,dest)
 
-def call(action,**kwargs):
+def call(action, **kwargs):
+    result = _call(action, **kwargs)
+    if action == 'generate' and result.get('confirmation_required'):
+        result = _call(action, **kwargs, repeat_confirmation=result['repeat_token'])
+    return result
+
+
+def _call(action,**kwargs):
     request=work/'request.json';response=work/'response.json'
     request.write_text(json.dumps({'action':action,'folder':str(folder),'catalog_path':str(catalog),**kwargs}),encoding='utf-8')
     response.unlink(missing_ok=True)
@@ -44,7 +51,7 @@ def call(action,**kwargs):
 scan=call('scan')
 assert scan['version']==VERSION
 assert len(scan['entries'])==4 and all(e['status']=='READY' for e in scan['entries'])
-result=call('generate',selected=[{'path':e['path'],'sha256':e['sha256']} for e in scan['entries']])
+result=call('generate', output_format='docx',selected=[{'path':e['path'],'sha256':e['sha256']} for e in scan['entries']])
 paths=[Path(o['path']) for o in result['outputs']]
 assert len(paths)==3
 layout=verify_word(paths,export_pdf=True)

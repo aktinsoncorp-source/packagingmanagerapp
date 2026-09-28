@@ -21,7 +21,14 @@ for sub in ('SPX','FLASH','LAZADA & TIKTOK'):
     shutil.copytree(ROOT/'20260926'/sub,folder/sub)
 exe=ROOT/'Packing List Manager'/'App Files'/'PackingEngine.exe'
 
-def call(action,**args):
+def call(action, **kwargs):
+    result = _call(action, **kwargs)
+    if action == 'generate' and result.get('confirmation_required'):
+        result = _call(action, **kwargs, repeat_confirmation=result['repeat_token'])
+    return result
+
+
+def _call(action,**args):
     request=work/'request.json';response=work/'response.json'
     request.write_text(json.dumps({'action':action,'folder':str(folder),**args}),encoding='utf-8')
     if response.exists():response.unlink()
@@ -34,7 +41,7 @@ first=call('scan')
 assert len(first['entries'])==9
 assert all(e['status']=='READY' for e in first['entries'])
 selected=[{'path':e['path'],'sha256':e['sha256']} for e in first['entries']]
-result=call('generate',selected=selected)
+result=call('generate', output_format='docx',selected=selected)
 assert len(result['outputs'])==3
 for output in result['outputs']:
     name=output['filename'];group=name.split('_Packing_')[0]

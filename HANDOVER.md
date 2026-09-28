@@ -1,12 +1,13 @@
-# Packing List Manager 1.7.0 handover
+# Packing List Manager 1.8.0 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.7.0. The preceding installed 1.6.1 release,
-including its private catalog, is preserved in PackingListApp/qa/previous-release-1.6.1.
+The executable and engine are version 1.8.0. The preceding installed 1.7.0 release,
+including its private catalog, is preserved in PackingListApp/qa/previous-release-1.7.0.
+The 1.6.1 backup remains in PackingListApp/qa/previous-release-1.6.1.
 The 1.6.0 backup remains in PackingListApp/qa/previous-release-1.6.0.
 The version 1.5 backup remains in qa/previous-release-1.5.0.
 The earlier 1.4 backup also remains. Installed files match the staged build.
@@ -159,6 +160,55 @@ Version 1.7 verification (September 27):
   guide against the tested candidate. ProductNames.json, its backup and Settings.json
   were unchanged. Report: qa/couriers-1.7-installation.json. Employee help is updated.
 - Local source checkpoint: Git/v1.7.0. Previous version folders are preserved.
+
+## Version 1.8 export and employee workflow
+
+- Main labels no longer have step numbers. Clicking Generate opens a format choice
+  that defaults to PDF each time; Word (.docx) is available. Word validates A4 layout
+  for both formats and exports PDF. Temporary DOCX files are removed for PDF exports;
+  only the chosen format is published and recorded. Existing DOCX history is retained.
+- PDF and Word share platform/date numeric sequences. Completed Documents lists both
+  formats, opens either, and retains source/order/item snapshots. Deleting outputs
+  removes their coverage on scan; trailing suffix reuse and lower-gap rules still apply.
+- Repeat-order checking covers earlier history and overlaps with other readable PDFs
+  in the same dated folder (including unchecked PDFs). The engine returns a selection/
+  format-specific confirmation token before building files. The exact requested warning
+  uses a larger blue No button as Enter/Escape default; Yes is smaller. Declining creates
+  no output. Identical selected orders continue to print once. Checks are per date.
+- Define Name opens locked on every new form. Closed/open padlock icons have tooltips
+  and accessible names. Search and linked-original viewing work while locked; edits,
+  add/delete, Save and Excel Export/Import are disabled. Mutation methods reject locked
+  calls too. Save edits before relocking. Pending Excel sessions cannot be relocked.
+  The lock has no password and is intended to prevent accidental editing.
+- Done boxes in packing and picking-summary tables contain five spaces: [     ].
+- Totals below the main grid track only checked PDFs, unique orders and pieces, with
+  selected platform breakdowns. Deduplication follows generation's revision-first order.
+- Status shows Processed - PDF, Processed - Word or Processed - PDF + Word. Formats
+  are inferred from surviving nonsuperseded outputs matching current order fingerprints;
+  old Word records need no new metadata. Partial coverage is marked Some orders.
+  Rescanning after deletion drops the missing format or shows Output missing.
+
+Verification September 28:
+- All 96 regression tests passed: qa/release-1.8-tests.log.
+- All 44 actual name-form/desktop Excel checks passed; latest result directory is
+  recorded in qa/release18-controls/excel-latest.txt. Existing merge, uppercase,
+  single-line, closed-Excel errors and temporary-workbook cleanup remain verified.
+- Real export dialogs confirmed PDF default on every open, selectable Word, a larger
+  No button, Enter/Escape defaulting to No, and cancellation by the default action.
+  Evidence: qa/release18-controls/dialogs-ok.txt and its PNGs.
+- Packaged generation used isolated copies across all four platforms: 17 orders /
+  30 pieces. PDF outputs used _1 and later Word outputs _2. Word checked all order
+  tables and summary page breaks. All six PDF pages were rendered with Poppler and
+  visually reviewed. All 38 tick boxes had the increased measured spacing; Word box
+  text was verified too. Report: qa/release-1.8-verification.json.
+- Main UI checks covered per-file courier changes, check-all and dynamic individual
+  selection totals. Final rebuilt engine scan showed PDF + Word for all four processed
+  platform rows. Final UI evidence is under qa/release18-0vi2ax_9/main-final.png and
+  status-response.json. Locked Define Name and mixed-format Completed Documents were
+  visually checked. Production packing documents were not regenerated during QA.
+- Installed files match the final staged release: 297 engine files plus executable,
+  icon and guide. ProductNames.json, its backup and Settings.json were preserved.
+  Report: qa/release-1.8-installation.json. Local checkpoint: Git/v1.8.0.
 
 ## Maintenance
 

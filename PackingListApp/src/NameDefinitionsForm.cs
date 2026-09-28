@@ -16,6 +16,9 @@ namespace PackingListManager {
         readonly string[] fields = {"original_product","original_variation","alternative_product","alternative_variation"};
         int revision;
         bool dirty, loading, working;
+        bool editLocked=true;
+        Button lockButton,unlockButton;
+        readonly ToolTip lockTips=new ToolTip();
         Button saveButton,addButton,deleteButton,exportButton,importButton;
         readonly List<DataGridViewRow> selectionOrder=new List<DataGridViewRow>();
         internal Func<Dictionary<string,object>,bool> ConfirmMerge=null;
@@ -33,7 +36,12 @@ namespace PackingListManager {
             layout.Controls.Add(note,0,0);
             var find=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};
             find.Controls.Add(new Label {Text="Search",AutoSize=true,Margin=new Padding(0,6,10,0)});
-            search.Width=390;find.Controls.Add(search);count.AutoSize=true;count.Margin=new Padding(16,6,0,0);find.Controls.Add(count);layout.Controls.Add(find,0,1);
+            search.Width=390;find.Controls.Add(search);count.AutoSize=true;count.Margin=new Padding(16,6,0,0);find.Controls.Add(count);
+            lockButton=new Button {Name="lockNames",Text="",Width=38,Height=32,Image=LockIcon(false),AccessibleName="Lock name editing",FlatStyle=FlatStyle.Flat,Margin=new Padding(18,0,4,0)};
+            unlockButton=new Button {Name="unlockNames",Text="",Width=38,Height=32,Image=LockIcon(true),AccessibleName="Unlock name editing",FlatStyle=FlatStyle.Flat};
+            lockTips.SetToolTip(lockButton,"Lock name editing");lockTips.SetToolTip(unlockButton,"Unlock name editing");
+            lockButton.Click+=(s,e)=>SetEditLocked(true);unlockButton.Click+=(s,e)=>SetEditLocked(false);
+            find.Controls.Add(lockButton);find.Controls.Add(unlockButton);layout.Controls.Add(find,0,1);
             grid.Name="namesGrid";grid.Dock=DockStyle.Fill;grid.BackgroundColor=Color.White;grid.RowHeadersWidth=32;
             grid.AllowUserToAddRows=true;grid.AllowUserToDeleteRows=false;grid.MultiSelect=true;grid.SelectionMode=DataGridViewSelectionMode.FullRowSelect;
             grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;grid.AutoSizeRowsMode=DataGridViewAutoSizeRowsMode.AllCells;
@@ -83,9 +91,9 @@ namespace PackingListManager {
             exportButton=Button("Export",85);exportButton.Name="exportNames";exportButton.Click+=async(s,e)=>await ExportToExcel();
             importButton=Button("Import",85);importButton.Name="importNames";importButton.Click+=async(s,e)=>await ImportFromExcel();
             var close=Button("Close",95);close.Click+=(s,e)=>Close();layout.Controls.Add(buttons,0,3);
-            message.Dock=DockStyle.Fill;message.Font=new Font("Segoe UI",9F);message.Text="Start alternatives with a letter or number. Common symbols are allowed afterwards. Trailing spaces are removed.";layout.Controls.Add(message,0,4);Controls.Add(layout);
+            message.Dock=DockStyle.Fill;message.Font=new Font("Segoe UI",9F);message.Text="Names are locked. Click the open-padlock icon to edit or use Excel.";layout.Controls.Add(message,0,4);Controls.Add(layout);
             revision=Convert.ToInt32(catalog["revision"]);Fill(Rows(catalog["rows"]));RefreshExcelState();
-            Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}};
+            Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}lockButton.Image.Dispose();unlockButton.Image.Dispose();lockTips.Dispose();};
             FormClosing+=async(s,e)=>{
                 if(working){e.Cancel=true;return;}
                 grid.EndEdit();
@@ -152,14 +160,35 @@ namespace PackingListManager {
             catch(Exception ex){LastError=ex.Message;message.Text=ex.Message;if(!SuppressDialogs)MessageBox.Show(this,ex.Message,"Check names",MessageBoxButtons.OK,MessageBoxIcon.Warning);return false;}
             finally{working=false;buttons.Enabled=true;search.Enabled=true;UseWaitCursor=false;RefreshExcelState();}
         }
+        internal bool SetEditLocked(bool value) {
+            if(working||excel!=null)return false;
+            if(value&&dirty){message.Text="Save your name changes before locking.";return false;}
+            editLocked=value;RefreshExcelState();
+            message.Text=value?"Names are locked. Click the open-padlock icon to edit or use Excel.":"Editing unlocked. Save your changes, then click the closed-padlock icon to lock.";
+            return true;
+        }
+        static Bitmap LockIcon(bool open) {
+            var image=new Bitmap(24,24);
+            using(var g=Graphics.FromImage(image))using(var pen=new Pen(Color.FromArgb(31,55,78),2))using(var brush=new SolidBrush(Color.FromArgb(31,55,78))) {
+                g.SmoothingMode=System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                if(open){g.DrawArc(pen,9,2,10,12,180,180);g.DrawLine(pen,9,8,9,13);}
+                else {g.DrawArc(pen,7,2,10,12,180,180);g.DrawLine(pen,7,8,7,13);g.DrawLine(pen,17,8,17,13);}
+                g.DrawRectangle(pen,5,11,14,10);g.FillEllipse(brush,10,14,4,4);g.DrawLine(pen,12,17,12,19);
+            }
+            return image;
+        }
         void RefreshExcelState() {
-            bool pending=excel!=null;
-            exportButton.Enabled=!working&&!pending;importButton.Enabled=!working&&pending;
-            grid.Enabled=!working&&!pending;saveButton.Enabled=!working&&!pending;addButton.Enabled=!working&&!pending;deleteButton.Enabled=!working&&!pending;
+            bool pending=excel!=null,canEdit=!working&&!editLocked;
+            exportButton.Enabled=canEdit&&!pending;importButton.Enabled=canEdit&&pending;
+            grid.Enabled=!working&&!pending;grid.ReadOnly=editLocked||pending;grid.AllowUserToAddRows=canEdit&&!pending;
+            saveButton.Enabled=canEdit&&!pending;addButton.Enabled=canEdit&&!pending;deleteButton.Enabled=canEdit&&!pending;
+            lockButton.Enabled=!working&&!pending&&!editLocked;unlockButton.Enabled=!working&&!pending&&editLocked;
+            lockButton.BackColor=editLocked?Color.FromArgb(248,203,173):Color.White;
+            unlockButton.BackColor=editLocked?Color.White:Color.FromArgb(220,234,252);
         }
         void ResetExcel(){if(excel!=null)excel.Dispose();excel=null;RefreshExcelState();}
         internal async Task<bool> ExportToExcel() {
-            if(excel!=null)return false;
+            if(editLocked||excel!=null)return false;
             if(!await SaveNames())return false;
             return await Run(async()=>{
                 excel=new NameExcelSession();
@@ -171,6 +200,7 @@ namespace PackingListManager {
             });
         }
         internal async Task<bool> ImportFromExcel() {
+            if(editLocked)return false;
             return await Run(async()=>{
                 if(excel==null||!excel.IsOpen()||!System.IO.File.Exists(excel.FilePath)) {
                     ResetExcel();throw new Exception(NameExcelSession.MissingMessage);
@@ -213,6 +243,7 @@ namespace PackingListManager {
             return await call(new Dictionary<string,object>{{"action","names_save"},{"rows",preview["rows"]},{"revision",revision},{"merge_groups",approvals}});
         }
         internal async Task<bool> SaveNames() {
+            if(editLocked)return false;
             return await Run(async()=>{
                 var pending=CollectRows();
                 var priority=selectionOrder.Where(r=>r.Tag is Dictionary<string,object>).Select(r=>Convert.ToString(((Dictionary<string,object>)r.Tag)["id"])).ToArray();

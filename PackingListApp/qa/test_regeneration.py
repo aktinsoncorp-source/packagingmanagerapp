@@ -9,6 +9,7 @@ import sys
 APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / 'src'))
 import engine
+from generation_test_support import generate_approved
 from extractors import Batch, Item, Order, PackingError, file_hash
 from docx import Document
 
@@ -46,7 +47,7 @@ class RegenerationTests(unittest.TestCase):
         entries = self.scan()['entries']
         selected = [{'path': e['path'], 'sha256': e['sha256'], 'revision': revision} for e in entries
                     if names is None or Path(e['path']).name in names]
-        return engine.generate(self.folder, selected, verifier=layout)['outputs']
+        return generate_approved(self.folder, selected, verifier=layout)['outputs']
 
     def history(self):
         return json.loads((self.folder / '000 Output' / engine.HISTORY).read_text())
@@ -237,7 +238,7 @@ class RegenerationTests(unittest.TestCase):
             (out / paths[0].name).write_bytes(b'Another file arrived')
             return layout(paths)
         with self.assertRaisesRegex(PackingError, 'appeared while generating'):
-            engine.generate(self.folder, selection, verifier=race)
+            generate_approved(self.folder, selection, verifier=race)
         self.assertEqual(next(out.glob('*.docx')).read_bytes(), b'Another file arrived')
         self.assertFalse((out / engine.JOURNAL).exists())
 

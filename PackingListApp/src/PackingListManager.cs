@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.7.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.7.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.8.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.8.0.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -46,6 +46,7 @@ namespace PackingListManager {
         readonly CheckBox selectAllUse = new CheckBox();
         bool selectingAll;
         readonly Label summary = new Label();
+        readonly Label selectionTotals = new Label();
         readonly Label status = new Label();
         readonly ProgressBar progress = new ProgressBar();
         readonly Button chooseButton = new Button();
@@ -66,7 +67,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.7";
+            Text = "Packing List Manager 1.8";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -98,7 +99,10 @@ namespace PackingListManager {
                         var probe=grid.Rows.Cast<DataGridViewRow>().FirstOrDefault(r=>!r.Cells[0].ReadOnly);
                         if(probe!=null){var previous=probe.Cells[0].Value;probe.Cells[0].Value=true;RefreshSelection();manualSelectionWorks=generateButton.Enabled;probe.Cells[0].Value=previous;RefreshSelection();}
                         bool selectAllWorks=CheckSelectAllBehavior();
+                        bool selectionTotalsWork=CheckSelectionTotals();
+                        if(!selectionTotalsWork)throw new Exception("Selection totals verification failed.");
                         if(!selectAllWorks)throw new Exception("Select-all verification failed.");
+                        if(startupArgs.Contains("--select-for-preview"))ToggleAllUse();
                         if (startupArgs.Length >= 3) {
                             using (var bitmap = new Bitmap(Width,Height)) {
                                 DrawToBitmap(bitmap,new Rectangle(Point.Empty,Size));
@@ -135,7 +139,7 @@ namespace PackingListManager {
                                 }
                             }
                         }
-                        File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new { ok=lastError==null, rows=grid.Rows.Count, selectable=selectable, autoSelected=autoSelected, manualSelectionWorks=manualSelectionWorks, selectAllWorks=selectAllWorks, courierControlsValid=courierControlsValid, courierChangesWork=courierChangesWork, summary=summary.Text, status=status.Text, error=lastError }));
+                        File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new { ok=lastError==null, rows=grid.Rows.Count, selectable=selectable, autoSelected=autoSelected, manualSelectionWorks=manualSelectionWorks, selectAllWorks=selectAllWorks, selectionTotalsWork=selectionTotalsWork, courierControlsValid=courierControlsValid, courierChangesWork=courierChangesWork, summary=summary.Text, status=status.Text, error=lastError }));
                     } catch(Exception ex) {
                         File.WriteAllText(Path.Combine(appDir,"SelfTest.json"),json.Serialize(new {ok=false,error=ex.ToString()}));
                     }
@@ -190,7 +194,7 @@ namespace PackingListManager {
             var folders=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2,RowCount=2};
             folders.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100)); folders.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,150));
             folders.RowStyles.Add(new RowStyle(SizeType.Absolute,24));folders.RowStyles.Add(new RowStyle(SizeType.Absolute,36));
-            folders.Controls.Add(new Label {Text="1  Source folder",Dock=DockStyle.Fill,Font=new Font(Font,FontStyle.Bold)},0,0);
+            folders.Controls.Add(new Label {Text="Source Folder",Dock=DockStyle.Fill,Font=new Font(Font,FontStyle.Bold)},0,0);
             folderText.ReadOnly=true;folderText.Dock=DockStyle.Fill;folderText.BackColor=Color.White;folderText.Margin=new Padding(0,2,10,2);
             folders.Controls.Add(folderText,0,1);
             StyleButton(chooseButton,"Choose folder...",false);chooseButton.Dock=DockStyle.Fill;
@@ -209,7 +213,7 @@ namespace PackingListManager {
             StyleButton(addButton,"Add PDFs...",false);addButton.Width=124;addButton.Click+=async(s,e)=>await AddPdfs();controls.Controls.Add(addButton);
             layout.Controls.Add(controls,0,2);
 
-            summary.Text="2  Review new files";summary.Dock=DockStyle.Fill;summary.Font=new Font(Font,FontStyle.Bold);summary.TextAlign=ContentAlignment.MiddleLeft;
+            summary.Text="Review files";summary.Dock=DockStyle.Fill;summary.Font=new Font(Font,FontStyle.Bold);summary.TextAlign=ContentAlignment.MiddleLeft;
             layout.Controls.Add(summary,0,3);
             grid.Dock=DockStyle.Fill;grid.BackgroundColor=Color.White;grid.BorderStyle=BorderStyle.FixedSingle;
             grid.AllowUserToAddRows=false;grid.AllowUserToDeleteRows=false;grid.RowHeadersVisible=false;grid.MultiSelect=false;
@@ -247,7 +251,12 @@ namespace PackingListManager {
             };
             grid.DataError+=(s,e)=>{e.ThrowException=false;};
             grid.CellBeginEdit+=(s,e)=>{if(e.ColumnIndex==0){var en=(Dictionary<string,object>)grid.Rows[e.RowIndex].Tag;if(!CanSelectFile(en))e.Cancel=true;}else if(e.ColumnIndex==grid.Columns["courier"].Index&&!B((Dictionary<string,object>)grid.Rows[e.RowIndex].Tag,"is_shopee"))e.Cancel=true;};
-            layout.Controls.Add(grid,0,4);
+            var fileArea=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=1,RowCount=2,Margin=Padding.Empty};
+            fileArea.RowStyles.Add(new RowStyle(SizeType.Percent,100));fileArea.RowStyles.Add(new RowStyle(SizeType.Absolute,76));
+            fileArea.Controls.Add(grid,0,0);
+            selectionTotals.Name="selectionTotals";selectionTotals.Dock=DockStyle.Fill;selectionTotals.Padding=new Padding(5,8,5,0);
+            selectionTotals.Font=new Font("Segoe UI",9F);selectionTotals.BackColor=Color.FromArgb(232,238,247);
+            fileArea.Controls.Add(selectionTotals,0,1);layout.Controls.Add(fileArea,0,4);
 
             var secondary=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false,Padding=new Padding(0,5,0,0)};
             StyleButton(sourceButton,"Open selected PDF",false);sourceButton.Width=180;sourceButton.Click+=(s,e)=>{var en=Selected();if(en!=null)OpenFile(Path.Combine(DateFolder,S(en,"path").Replace('/',Path.DirectorySeparatorChar)));};secondary.Controls.Add(sourceButton);
@@ -258,7 +267,7 @@ namespace PackingListManager {
 
             var final=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,Padding=new Padding(0,8,0,5)};
             final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,260));final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));final.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
-            StyleButton(generateButton,"3  Generate Packing Lists",true);generateButton.Dock=DockStyle.Fill;generateButton.Click+=async(s,e)=>await Generate();final.Controls.Add(generateButton,0,0);
+            StyleButton(generateButton,"Generate Packing Lists",true);generateButton.Dock=DockStyle.Fill;generateButton.Click+=async(s,e)=>await Generate();final.Controls.Add(generateButton,0,0);
             StyleButton(outputButton,"Open Output Folder",false);outputButton.Dock=DockStyle.Fill;outputButton.Click+=(s,e)=>{if(Directory.Exists(OutputFolder))OpenFile(OutputFolder);else MessageBox.Show(this,"The Output folder will appear after your first batch.","Output folder");};final.Controls.Add(outputButton,1,0);
             var hint=new Label {Text="A4  |  One table per order\nSPX / FLASH orange  ·  Lazada + TikTok blue",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleRight,Font=new Font("Segoe UI",9F),ForeColor=Color.FromArgb(82,96,112)};
             final.Controls.Add(hint,2,0);layout.Controls.Add(final,0,6);
@@ -413,7 +422,7 @@ namespace PackingListManager {
                 if(preserveSelections)foreach(DataGridViewRow row in grid.Rows)if(S((Dictionary<string,object>)row.Tag,"path")==selectedPath){grid.CurrentCell=row.Cells["file"];break;}
                 int fresh=entries.Sum(e=>N(e,"new_orders")),issues=entries.Count(e=>S(e,"status")=="REVIEW"||S(e,"status")=="ERROR"||S(e,"status")=="COURIER");
                 int missing=entries.Sum(e=>N(e,"missing_orders"));
-                summary.Text="2  Review files — "+fresh+" new orders"+(missing>0?"  |  "+missing+" orders missing Word output":"")+(issues>0?"  |  "+issues+" file(s) need attention":"");
+                summary.Text="Review files — "+fresh+" new orders"+(missing>0?"  |  "+missing+" orders missing output documents":"")+(issues>0?"  |  "+issues+" file(s) need attention":"");
                 status.Text=entries.Count==0?"No readable, supported packing PDFs for this date. Choose a dated folder or use Add PDFs.":"Tick Use for any PDF to generate again. New files and files missing output are selected automatically.";
                 ShowSelected();RefreshSelection();
             } catch(Exception ex){loadingFiles=false;ShowError(ex);grid.Rows.Clear();entries.Clear();outputs.Clear();RefreshSelection();}
@@ -439,7 +448,38 @@ namespace PackingListManager {
             generateButton.Enabled=grid.Rows.Cast<DataGridViewRow>().Any(r=>Convert.ToBoolean(r.Cells[0].Value));
             generateButton.BackColor=generateButton.Enabled?Color.FromArgb(25,87,157):Color.FromArgb(223,231,241);
             ShowSelected();historyButton.Enabled=outputs.Count>0;
-            RefreshUseHeader();
+            RefreshUseHeader();UpdateSelectionTotals();
+        }
+        internal Dictionary<string,int[]> SelectionCounts() {
+            var counts=new Dictionary<string,int[]>();var seen=new HashSet<string>();
+            var rows=grid.Rows.Cast<DataGridViewRow>().Where(r=>Convert.ToBoolean(r.Cells[0].Value)&&r.Tag is Dictionary<string,object>)
+                .OrderBy(r=>!revisions.Contains(S((Dictionary<string,object>)r.Tag,"path")));
+            foreach(var row in rows) {
+                var entry=(Dictionary<string,object>)row.Tag;string platform=S(entry,"platform");
+                if(!counts.ContainsKey(platform))counts[platform]=new int[3];counts[platform][0]++;
+                if(entry.ContainsKey("order_totals"))foreach(var order in Rows(entry["order_totals"]))if(seen.Add(S(order,"key"))){counts[platform][1]++;counts[platform][2]+=N(order,"pieces");}
+            }
+            return counts;
+        }
+        void UpdateSelectionTotals() {
+            var counts=SelectionCounts();
+            selectionTotals.Text="Selected: "+counts.Values.Sum(c=>c[0])+" PDFs  |  "+counts.Values.Sum(c=>c[1])+" orders  |  "+counts.Values.Sum(c=>c[2])+" pieces";
+            if(counts.Count>0)selectionTotals.Text+="\n"+String.Join("     ",new[]{"SPX","FLASH","LAZADA","TIKTOK"}.Where(counts.ContainsKey).Select(p=>p+": "+counts[p][0]+" PDFs / "+counts[p][1]+" orders / "+counts[p][2]+" pieces"));
+            selectionTotals.Text+="\nMatching orders are counted once.";
+        }
+        internal bool CheckSelectionTotals() {
+            var saved=grid.Rows.Cast<DataGridViewRow>().ToDictionary(r=>r,r=>Convert.ToBoolean(r.Cells[0].Value));
+            try {
+                foreach(DataGridViewRow r in grid.Rows)r.Cells[0].Value=false;
+                if(SelectionCounts().Count!=0)return false;
+                foreach(var row in grid.Rows.Cast<DataGridViewRow>().Where(r=>!r.Cells[0].ReadOnly)) {
+                    row.Cells[0].Value=true;var entry=(Dictionary<string,object>)row.Tag;
+                    var counts=SelectionCounts();var values=counts[S(entry,"platform")];
+                    if(counts.Count!=1||values[0]!=1||values[1]!=N(entry,"orders")||values[2]!=N(entry,"pieces"))return false;
+                    row.Cells[0].Value=false;
+                }
+                return true;
+            } finally {foreach(var pair in saved)pair.Key.Cells[0].Value=pair.Value;RefreshSelection();}
         }
         void ShowError(Exception ex) {lastError=ex.Message;status.Text="Needs attention: "+ex.Message;if(startupArgs.Length==0||startupArgs[0]!="--self-test")MessageBox.Show(this,ex.Message,"Needs attention",MessageBoxButtons.OK,MessageBoxIcon.Warning);}
         void OpenFile(string path) {try{Process.Start(new ProcessStartInfo(path){UseShellExecute=true});}catch(Exception ex){ShowError(ex);}}
@@ -489,7 +529,20 @@ namespace PackingListManager {
             }
             if(selected.Count==0)return;
             try {
-                var result=await Call(new Dictionary<string,object>{{"action","generate"},{"selected",selected}},"Generating Word documents and checking A4 pagination. Please wait...");
+                string format;
+                using(var options=PackingDialogs.ExportOptions()) {
+                    if(options.ShowDialog(this)!=DialogResult.OK)return;
+                    format=((RadioButton)options.Controls.Find("exportPdf",true)[0]).Checked?"pdf":"docx";
+                }
+                var request=new Dictionary<string,object>{{"action","generate"},{"selected",selected},{"output_format",format}};
+                var result=await Call(request,"Preparing "+(format=="pdf"?"PDF":"Word")+" packing lists and checking A4 pagination. Please wait...");
+                while(B(result,"confirmation_required")) {
+                    using(var warning=PackingDialogs.RepeatWarning(N(result,"repeat_count"))) {
+                        if(warning.ShowDialog(this)!=DialogResult.Yes){status.Text="Generation cancelled. No documents created.";return;}
+                    }
+                    request["repeat_confirmation"]=result["repeat_token"];
+                    result=await Call(request,"Generating the confirmed packing lists. Please wait...");
+                }
                 var made=Rows(result["outputs"]);
                 await Scan();
                 using(var done=new Form {Text="Packing lists ready",Size=new Size(720,340),StartPosition=FormStartPosition.CenterParent,Font=Font}) {
@@ -543,7 +596,7 @@ namespace PackingListManager {
                 }
                 platform.Expand();
             }
-            caption.Text=visible.Count==0?"No completed Word files are currently in this date's Output folder.":
+            caption.Text=visible.Count==0?"No completed PDF or Word files are currently in this date's Output folder.":
                 "Expand a document to see its source PDFs. Expand a PDF and order to see the included products and pieces.";
             tree.EndUpdate();
         }
@@ -556,7 +609,7 @@ namespace PackingListManager {
             var tree=new TreeView {Name="completedTree",Dock=DockStyle.Fill,HideSelection=false,ShowNodeToolTips=true,ItemHeight=28,Indent=22,BackColor=Color.White,BorderStyle=BorderStyle.FixedSingle};
             layout.Controls.Add(tree,0,1);
             var buttons=new FlowLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(0,10,0,0),WrapContents=false};
-            var open=new Button {Text="Open Word document",Width=180,Height=32,Enabled=false};
+            var open=new Button {Text="Open document",Width=180,Height=32,Enabled=false};
             var pdf=new Button {Text="Open source PDF",Width=155,Height=32,Enabled=false};
             var refresh=new Button {Text="Refresh list",Width=120,Height=32};
             var log=new Button {Text="Open processing log",Width=175,Height=32};

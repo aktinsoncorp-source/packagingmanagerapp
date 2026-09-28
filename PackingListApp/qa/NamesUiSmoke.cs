@@ -41,6 +41,10 @@ namespace PackingListManager {
                 new {original_product="Second original",original_variation="Two",alternative_product="SAME NAME ",alternative_variation="size "}}}});
             using(var form=new NameDefinitionsForm(data,Call)) {
                 form.SuppressDialogs=true;form.StartPosition=FormStartPosition.Manual;form.Location=new System.Drawing.Point(-30000,-30000);form.Show();
+                var lockedGrid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
+                Check(lockedGrid.ReadOnly&&!lockedGrid.AllowUserToAddRows&&!Enabled(form,"exportNames")&&!Enabled(form,"importNames"),"Name editor opens locked");
+                Check(!await form.SaveNames()&&!await form.ExportToExcel()&&!await form.ImportFromExcel(),"Locked editor refuses every mutation entry point");
+                Check(form.SetEditLocked(false)&&!lockedGrid.ReadOnly&&lockedGrid.AllowUserToAddRows,"Unlock enables name editing");
                 var grid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
                 int prompts=0;string baseName="";
                 form.ConfirmMerge=g=>{prompts++;baseName=Convert.ToString(g["base_product"]);return false;};
@@ -81,6 +85,7 @@ namespace PackingListManager {
                 Check(grid.Rows[0].Visible,"Search finds linked originals as well as the base");
                 search.Clear();
                 using(var bitmap=new System.Drawing.Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new System.Drawing.Rectangle(System.Drawing.Point.Empty,form.Size));bitmap.Save(Path.Combine(work,"merged-names.png"));}
+                Check(form.SetEditLocked(true)&&lockedGrid.ReadOnly,"Saved name editor can be relocked");
                 form.Close();
             }
         }
@@ -90,9 +95,14 @@ namespace PackingListManager {
                 new {original_product="Listing B",original_variation="Rose",alternative_product="",alternative_variation=""}}}});
             using(var form=new NameDefinitionsForm(data,Call)) {
                 form.SuppressDialogs=true;form.StartPosition=FormStartPosition.Manual;form.Location=new System.Drawing.Point(-30000,-30000);form.Show();
+                var lockedGrid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
+                Check(lockedGrid.ReadOnly&&!lockedGrid.AllowUserToAddRows&&!Enabled(form,"exportNames")&&!Enabled(form,"importNames"),"Name editor opens locked");
+                Check(!await form.SaveNames()&&!await form.ExportToExcel()&&!await form.ImportFromExcel(),"Locked editor refuses every mutation entry point");
+                Check(form.SetEditLocked(false)&&!lockedGrid.ReadOnly&&lockedGrid.AllowUserToAddRows,"Unlock enables name editing");
                 Check(Enabled(form,"exportNames")&&!Enabled(form,"importNames"),"Only Export initially enabled");
                 Check(await form.ExportToExcel(),"Export opens temporary Excel workbook");
                 Check(!Enabled(form,"exportNames")&&Enabled(form,"importNames"),"Only Import enabled during Excel edit");
+                Check(!form.SetEditLocked(true)&&!Enabled(form,"lockNames"),"Pending Excel import cannot be locked halfway through");
                 string temp=form.excel.FilePath;
                 form.excel.Workbook.Worksheets["Names"].Range["A2"].Value2="Updated original";
                 form.excel.Workbook.Worksheets["Names"].Range["B2"].Value2="Updated variation";
@@ -125,6 +135,7 @@ namespace PackingListManager {
                 Check(File.ReadAllText(catalog)==saved&&form.excel.IsOpen()&&Enabled(form,"importNames"),"Invalid import retains workbook and original catalog for correction");
                 form.excel.Workbook.Worksheets["Names"].Range["C2"].Value2="Corrected name";
                 Check(await form.ImportFromExcel(),"Corrected workbook imports successfully");
+                Check(form.SetEditLocked(true)&&lockedGrid.ReadOnly,"Saved name editor can be relocked");
                 form.Close();
             }
             await TestMerging();

@@ -27,9 +27,9 @@ Version 1.3 checks: six naming/summary tests passed; the installed executable pr
 
 ## Regeneration and missing Word files
 
-Processed and repeated PDF rows remain selectable and start unchecked. New PDFs and PDFs with uncovered orders due to missing Word outputs start checked. Generate includes all orders from the selected PDFs, deduplicating identical order IDs within the run. Another generation uses one above the highest suffix physically present in that output group and date, starting at 1 when none remain. Deleted trailing numbers can be reused; lower gaps are not filled. Regeneration keeps surviving earlier copies active; a reviewed revision supersedes all older affected copies.
+Processed and repeated PDF rows remain selectable and start unchecked. New PDFs and PDFs with uncovered orders due to missing Word outputs start checked. Generate includes all orders from the selected PDFs, deduplicating identical order IDs within the run. Another generation uses one above the highest suffix physically present across PDF and Word files in that output group and date, starting at 1 when none remain. Deleted trailing numbers can be reused; lower gaps are not filled. Regeneration keeps surviving earlier copies active; a reviewed revision supersedes all older affected copies.
 
-Each output stores immutable `sources` (PDF path, SHA256, included order keys), `order_fingerprints`, `order_snapshots`, and a unique `record_id`. Before a deleted filename is reused, its old record is moved to `archived_outputs`; it cannot count as coverage for the replacement. The text log retains both generations and their record IDs. The readable log also lists selected PDFs and linked order IDs. Scan checks output existence, ignores superseded order versions, and finds any surviving current copy before marking an order missing. Renamed or moved Word files count as missing at their recorded paths. A partial PDF is regenerated in full when selected. Changed source contents still require explicit review.
+Each output stores immutable `sources` (PDF path, SHA256, included order keys), `order_fingerprints`, `order_snapshots`, and a unique `record_id`. Before a deleted filename is reused, its old record is moved to `archived_outputs`; it cannot count as coverage for the replacement. The text log retains both generations and their record IDs. The readable log also lists selected PDFs and linked order IDs. Scan checks output existence, ignores superseded order versions, and finds any surviving current copy before marking an order missing. Renamed or moved generated files count as missing at their recorded paths. A partial PDF is regenerated in full when selected. Changed source contents still require explicit review.
 
 Scan migrates earlier log-only batches and older app records into these associations while retaining their original Word files and text log. It saves the JSON associations so subsequent deletion of an old Word file can be detected. If a legacy Word file was already deleted, its source paths are recovered from the text log; no old order contents are invented. Deleting app-era JSON history is still an error because it removes the source/version record.
 
@@ -134,3 +134,42 @@ The full suite has 80 tests. `qa/couriers_smoke.py <release-directory> <source-p
 checks the real Windows dropdown, read-only platform cells, packaged generation,
 Word pagination and the reported 127-order/300-piece continuation fixture using
 isolated copies. That private PDF is not distributed in Git. Run with PYTHONUTF8=1.
+
+## Export and employee controls (version 1.8)
+
+`handle(generate)` and the Windows export dialog default to PDF. The internal Python
+`generate` helper retains its Word default for development callers. The export dialog
+resets to PDF every time. Word builds and validates both formats; for PDF, its fixed
+format export is checked for the expected page count and the temporary DOCX is removed
+before publishing. Only the chosen format is recorded. PDF and DOCX share numeric suffix
+allocation, completed-document listing, regeneration and missing-output coverage.
+
+Before building anything, generation checks selected order IDs against all readable
+PDFs in the dated folder and earlier recorded orders. Repeats return confirmation_required
+and a token tied to selection, repeated IDs and output format. The UI shows the exact
+requested warning; Enter/Escape select the larger blue No button. Yes is smaller.
+A second generate request carries the token and repeats validation. Duplicates within
+one generation remain printed once. This check is scoped to the selected dated folder.
+
+Scan supplies per-order key/piece counts for local UI totals. Checked source PDFs are
+counted by platform; order IDs/pieces are deduplicated in the same stable revision-first
+order as generation. Only checked platforms appear below the main grid. Main section
+and action labels no longer have step numbers. Both document tables use [     ] boxes.
+
+NameDefinitionsForm opens with editLocked=true. Two GDI-drawn padlock icons and tooltips
+control editing. Search/linked-original viewing stay available while locked. Save/add/
+delete/Excel buttons and editable cells are disabled. Save/Export/Import methods also
+reject locked calls. Pending Excel sessions cannot be relocked; unsaved edits must be
+saved first. A new form always starts locked. This is an accidental-edit guard without
+a password. The older NamesUiSmoke harness now explicitly unlocks before editing and
+checks locked entry points, relocking and the Excel-session constraint.
+
+QA: test_exports.py checks format history, shared numbering, missing PDFs, repeat-token
+gates and wider checkbox text. ExportDialogsSmoke.cs checks real radio/button defaults.
+release18_smoke.py tests packaged PDF and Word generation, warning cancellation before
+publication, actual PDF bracket spacing, history, and dynamic main-form totals on copies.
+
+Processed status reports PDF, Word or PDF + Word from surviving nonsuperseded outputs
+matching current order fingerprints. Older Word records need no format field because
+the extension identifies them. Deletions remove formats on rescan. Partial coverage is
+labelled Some orders. Ignored changed-file status reports the retained earlier format.

@@ -99,7 +99,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
                 row = deepcopy(row_proto)
                 tbl.append(row)
                 cells = table.rows[-1].cells
-                for cell, text in zip(cells, ['[ ]', item.product, item.variation, str(item.pieces)]):
+                for cell, text in zip(cells, ['[     ]', item.product, item.variation, str(item.pieces)]):
                     set_text(cell.paragraphs[0], text)
                     fill = 'FFFFFF' if item_no % 2 == 0 else ('F5FAFE' if group == 'LAZADA_TIKTOK' else 'FFF7F1')
                     cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), fill)
@@ -129,7 +129,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
         row = table.rows[-1]
         if row._tr.get_or_add_trPr().find(qn('w:cantSplit')) is None:
             row._tr.get_or_add_trPr().append(OxmlElement('w:cantSplit'))
-        for cell, text in zip(row.cells, ['[ ]', name, size, str(pieces)]):
+        for cell, text in zip(row.cells, ['[     ]', name, size, str(pieces)]):
             set_text(cell.paragraphs[0], text)
             cell.paragraphs[0].paragraph_format.keep_with_next = i == len(summary_rows)-1
             cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'),

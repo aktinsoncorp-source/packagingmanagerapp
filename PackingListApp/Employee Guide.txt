@@ -1,11 +1,11 @@
 PACKING LIST MANAGER
-Employee guide - version 1.7.0
-Help updated September 27, 2026
+Employee guide - version 1.8.0
+Help updated September 28, 2026
 
 Start
 Double-click Packing List Manager.exe. Keep the App Files folder beside it.
 This program runs on this Windows computer. Microsoft Word is used to check
-the packing document layout. Python and ChatGPT are not needed to use it.
+the packing document layout and create PDF exports. Python and ChatGPT are not needed to use it.
 
 Folder format
 Use one main folder, with a separate dated folder for each processing day.
@@ -30,9 +30,9 @@ Packing Files\
       20260927_Lazada_PL_1.pdf
       20260927_TikTok_PL_1.pdf
     000 Output\
-      SPX_Packing_Checklist_2026-09-27_1.docx
-      FLASH_Packing_Checklist_2026-09-27_1.docx
-      LAZADA_TIKTOK_Packing_Checklist_2026-09-27_1.docx
+      SPX_Packing_Checklist_2026-09-27_1.pdf
+      FLASH_Packing_Checklist_2026-09-27_1.pdf
+      LAZADA_TIKTOK_Packing_Checklist_2026-09-27_1.pdf
       Processed_Files.txt
       Processing_History.json
 
@@ -110,7 +110,7 @@ Checking a different folder
    If no files appear, check the dated folder name and source PDF location.
    If a row needs attention, read its message before generating.
 When moving previously processed work, copy the entire dated folder,
-including 000 Output, its completed Word documents, both history files, and
+including 000 Output, its completed PDF/Word documents, both history files, and
 Courier_Selections.json if present (the saved manual courier choices).
 Older batches made before this app may have only Processed_Files.txt; keep
 that log and their Word documents. The app verifies that earlier history.
@@ -122,7 +122,7 @@ Daily steps
 2. Save downloaded PDFs anywhere inside the selected dated folder, or click
    Add PDFs. SPX and FLASH subfolders let Auto select the correct courier.
    For a generic Shopee file elsewhere, choose its Courier in the table.
-3. Click Scan for new PDFs. New files and files missing their Word output
+3. Click Scan for new PDFs. New files and files missing their generated output
    are selected automatically. Processed files stay selectable: tick Use
    to generate them again. Click the checkbox in the Use column header to
    select all compatible PDFs, including processed ones. Click it again to
@@ -130,21 +130,57 @@ Daily steps
    Files with errors, no identified courier, or awaiting changed-file review
    are excluded until resolved. Check the Platform and Courier columns.
    To view a file's contents, select its row and click Open selected PDF.
-4. Click Generate Packing Lists. Wait until the completion window appears.
-   Microsoft Word checks that each entire order fits on one A4 page.
-5. Open the completed document and print with A4 paper in Word.
+4. Click Generate Packing Lists. Choose PDF (the default) or Word (.docx),
+   then click Generate. The format starts at PDF each time you open this choice.
+   Microsoft Word checks A4 layout for both formats and creates the PDF export.
+   Only your chosen format is saved into 000 Output and Completed documents.
+5. If a repeat warning appears, No is selected by default. Enter, Escape or
+   closing the warning cancels. Click the smaller Yes button only when you
+   intend to generate those orders again. No creates no completed documents.
+6. Open and print the PDF in your PDF viewer, or open the Word file in Word.
+   Use A4 paper.
 
 What is generated
-- One Word document for SPX and one for FLASH, using orange tables.
-- One combined Word document for Lazada and TikTok, using blue tables and
+- One document in your chosen format for SPX and one for FLASH, with orange tables.
+- One combined document for Lazada and TikTok, using blue tables and
   separate platform labels. A batch containing only one of these platforms
   still uses the LAZADA_TIKTOK filename sequence.
 - All files go in the selected dated folder's 000 Output folder.
-- Each group uses the next suffix: _1.docx, _2.docx, _3.docx, and so on.
+- Each group uses the next suffix: _1, _2, _3, and so on, followed by .pdf or .docx.
+  PDF and Word share one sequence: _1.pdf followed by a Word export gives _2.docx.
 - Output suffixes are assigned by the program independently of the numbers
   in source PDF filenames. Keep the generated output and history filenames.
 - The source PDF batches stay grouped. Each order has one bordered table,
-  Employee, Number and Time writing lines, product check boxes, variation and pieces.
+  Employee, Number and Time writing lines, product check boxes [     ], variation
+  and pieces. Picking-summary Done boxes have the same wider writing space.
+
+Processed format in Status
+Processed rows show Processed - PDF, Processed - Word, or Processed - PDF + Word.
+The formats refer to completed files that still exist and contain the current order
+versions. Scan again after deleting a file: the status drops the missing format, or
+shows Output missing when no current output remains. Earlier superseded revisions
+are excluded. If only some orders have an output, the status says Some orders and
+shows the available format. Processed rows remain selectable for another generation.
+
+Selected totals
+Below the PDF list, Selected shows the number of checked PDFs, orders and pieces.
+It updates immediately when you tick or untick Use, or use the select-all checkbox.
+Only checked platforms are listed: SPX, FLASH, LAZADA and/or TIKTOK. Highlighting a
+row without ticking Use does not add it to the total. Matching order IDs across
+checked PDFs are counted once, just as they will be printed once in that run.
+An overlapping order is assigned to the first selected source used for generation.
+
+Repeated-order warning
+The program checks order IDs against this dated folder's earlier generation history
+and other readable source PDFs in the same dated folder, including unchecked files.
+Previously generated orders still trigger the warning if their output was deleted.
+The warning says:
+Warning: There are orders in this packing list that has repeated. Do you wish to
+continue and generate the repeating orders again?
+No is the larger, highlighted default. Yes is smaller. Choose Yes only for an
+intentional reprint or revised batch. The program checks again after confirmation
+if the selection has changed. Identical overlapping orders print once per run.
+History checks are per dated folder; they do not search other dates or computers.
 
 Product picking summary
 Every generated document ends with a Product Picking Summary on a new page.
@@ -174,56 +210,57 @@ A renamed copy is identified as repeated and stays unchecked by default;
 you can still tick it to generate another copy.
 
 Generating or printing an earlier batch again
-To make another Word copy, tick Use beside any processed PDF and click
-Generate Packing Lists. You can combine it with other selected PDFs.
-Each platform uses one more than its highest Word filename number still in
-000 Output. Existing Word files are never overwritten.
+To make another copy, tick Use beside any processed PDF and click
+Generate Packing Lists. Choose PDF or Word and confirm the repeat warning only
+when a new copy is intended. You can combine it with other selected PDFs.
+Each platform uses one more than its highest PDF or Word filename number still in
+000 Output. Existing files are never overwritten.
 Examples for one platform:
-- No Word files remain: the next file is _1.
+- No generated PDF or Word files remain: the next file is _1.
 - _1 and _2 remain (you deleted _3): the next file is _3.
 - _1 and _3 remain (you deleted _2): the next file is _4.
 Gaps below the highest remaining number are not filled. SPX, FLASH, and
 LAZADA_TIKTOK have separate numbering for each date.
-To print an existing Word document, use Completed documents instead.
+To print an existing PDF or Word document, use Completed documents instead.
 
-If you delete a generated Word file
-Click Scan for new PDFs. The program checks which Word files still exist
+If you delete a generated PDF or Word file
+Click Scan for new PDFs. The program checks which PDF or Word files still exist
 inside this date's 000 Output folder and matches them to their source PDFs.
-If orders no longer have a current Word output, the affected PDF rows show
+If orders no longer have a current output document, the affected PDF rows show
 Output missing and are selected automatically. Click Generate Packing Lists
 to create a new numbered copy from those selected PDFs.
 If another current copy still covers every order, the PDF remains Processed;
 you can tick Use to generate it again anyway. A superseded revision does not
-count as a current copy. Moving or renaming a Word file away from its recorded
+count as a current copy. Moving or renaming a generated file away from its recorded
 name in 000 Output is treated as missing.
 A PDF may contain both covered and missing orders. When selected, its full
 contents are included in the new document. Its picking summary matches that
 new document only.
-Completed documents shows only Word files that still exist. Missing entries
+Completed documents shows only PDF or Word files that still exist. Missing entries
 are removed when you open the list, click Refresh list, or scan again.
 
 Using Completed documents
 The groups appear in this order: SPX, FLASH, Lazada + TikTok. Within each
 group, files appear in numeric order: _1, _2, _3 ... _10.
-Click the + beside a generated Word file to expand its included source PDFs.
+Click the + beside a generated file to expand its included source PDFs.
 Expand a PDF to see its order IDs, then expand an order to see the printed
 product names, variations and pieces included in that document.
 The displayed data belongs to that generated document, even if the source
 PDF was changed afterward. If two selected PDFs share an order, that order
 can appear beneath both source PDFs, but is printed once in the document.
-Select any document, PDF or order and click Open Word document to view its
+Select any document, PDF or order and click Open document to view its
 packing list. Select a source PDF or its order to use Open source PDF.
-Refresh list removes any Word files deleted while this window is open.
+Refresh list removes any generated files deleted while this window is open.
 
 How the file history works
 Every generation records the selected source PDF paths, their file
-fingerprints, linked order IDs, and the Word filename containing those orders.
+fingerprints, linked order IDs, and the output filename containing those orders.
 Both the readable log and Processing_History.json retain these associations.
-Scan also saves associations from earlier logged batches before a Word file
+Scan also saves associations from earlier logged batches before a completed file
 is deleted. Keep the source PDFs and both history files so these links remain
 available; you do not need to delete history to generate again.
 Changed PDFs still require Review changed file before their current contents
-can replace an earlier version. Deleting a Word output does not bypass review.
+can replace an earlier version. Deleting a generated output does not bypass review.
 
 Changed files - supervisor review
 A changed file is marked for review and is not selected automatically.
@@ -250,7 +287,7 @@ If an order cannot fit on one A4 page, no completed batch is recorded.
 If Word needs setup or shows a dialog, finish that in Word and try again.
 
 Files to keep
-Keep source PDFs, completed Word documents, Processed_Files.txt and
+Keep source PDFs, completed PDF/Word documents, Processed_Files.txt and
 Processing_History.json together. Keep Courier_Selections.json too when present.
 Back up the whole dated folder.
 The text log is readable. The JSON file stores exact fingerprints and order
@@ -273,6 +310,15 @@ Define Name - standard product names
 Click Define Name near the bottom of the main window. Definitions apply across
 platforms, dates and source folders. Matching ignores letter case and trailing
 spaces. Unsupported PDFs do not add guessed items.
+
+The editor opens LOCKED every time. The closed-padlock and open-padlock icons have
+no text labels; hover over them for a tooltip. Click the open padlock to unlock.
+While locked, you can search and view linked originals, but cannot edit, add, delete,
+save, export to Excel or import. After unlocking, Export starts enabled and Import
+stays disabled until an Excel session is opened, as described below.
+Save your changes before clicking the closed padlock to lock again. If an Excel edit
+is pending, import it or close the editor first. This lock prevents accidental edits;
+it does not require a password. Closing and reopening always restores the lock.
 
 All four name fields are converted to UPPERCASE. Spaces at the end are removed;
 spaces between words remain. Enter a single line only: paragraphs, line breaks,
@@ -313,7 +359,8 @@ alone does not rediscover deleted pairs.
 
 Temporary Excel editing
 Desktop Microsoft Excel is required for these two small buttons.
-1. Export starts enabled; Import starts disabled.
+1. Unlock the editor with the open-padlock icon. Export becomes enabled; Import
+   starts disabled.
 2. Click Export. Direct edits are saved, including any merge confirmation, and
    the program opens Excel from an internal temporary folder. Export becomes
    disabled and Import enabled. The program's grid pauses editing.
