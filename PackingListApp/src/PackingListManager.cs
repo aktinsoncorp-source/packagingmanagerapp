@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.10.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.10.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.11.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.11.0.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -67,7 +67,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.10";
+            Text = "Packing List Manager 1.11";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -622,7 +622,7 @@ namespace PackingListManager {
             };
             pdf.Click+=(s,e)=>{var chosen=tree.SelectedNode==null?null:tree.SelectedNode.Tag as CompletedSelection;if(chosen==null||String.IsNullOrEmpty(chosen.Pdf))return;var path=Path.Combine(DateFolder,chosen.Pdf.Replace('/',Path.DirectorySeparatorChar));if(File.Exists(path))OpenFile(path);else MessageBox.Show(form,"This source PDF is no longer in its recorded folder. The included order data shown here was saved with the generated document.","Source PDF missing");};
             refresh.Click+=(s,e)=>{PopulateHistoryTree(tree,caption);open.Enabled=false;pdf.Enabled=false;};
-            log.Click+=(s,e)=>OpenFile(Path.Combine(OutputFolder,"Processed_Files.txt"));
+            log.Click+=(s,e)=>OpenFile(Path.Combine(OutputFolder,".PackingData","Processed_Files.txt"));
             buttons.Controls.Add(open);buttons.Controls.Add(pdf);buttons.Controls.Add(refresh);buttons.Controls.Add(log);buttons.Controls.Add(close);
             layout.Controls.Add(buttons,0,2);form.Controls.Add(layout);form.CancelButton=close;
             PopulateHistoryTree(tree,caption);return form;

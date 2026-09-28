@@ -219,3 +219,26 @@ No/all-processed and intentional reprint behavior; NameLocksSmoke.cs for aligned
 and lock/unlock behavior; ExportDialogsSmoke.cs for default No, continuation and X.
 qa/release110_performance.py compares old/new Word validation on identical documents;
 its baseline files and copied private fixtures are local QA inputs, excluded from Git.
+
+## Hidden internal storage (version 1.11)
+
+INTERNAL is .PackingData. HISTORY, LOG, JOURNAL, COURIERS and LOCK are paths relative
+to 000 Output containing that directory. internal_directory creates it and sets the
+Windows Hidden attribute without changing Explorer preferences. These are persistent
+records, never eligible for temporary cleanup. Completed files retain their root paths.
+
+folder_lock acquires the hidden lock; if a legacy root lock exists it also checks that
+lock before migration. Root records move via resumable individual renames. All target
+collisions are checked before any move; identical duplicates may be removed but differing
+copies stop with a review error. Only the obsolete unlocked root lock is removed.
+Lock initialization happens after acquisition, avoiding reads of another process's locked
+byte. New transaction staging folders live beneath .PackingData; journals store their
+paths relative to 000 Output. Legacy journal paths still recover without rewriting them.
+The UI processing-log button uses the hidden path.
+
+qa/test_internal_storage.py covers hidden attributes, byte-preserving migration,
+couriers, partly migrated dates, duplicate/conflicting records, both locks and new
+hidden journal/stage recovery. test_workflow.py covers pre-app logs and old root-stage
+recovery. qa/release111_smoke.py takes the candidate and a copied version-1.10 dated
+fixture; it exercises packaged migration, No, missing-output regeneration and main UI.
+Historical smoke tools may contain old raw metadata paths; use current smoke tests.

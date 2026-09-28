@@ -33,7 +33,7 @@ class ExportTests(unittest.TestCase):
     def test_pdf_only_export_saved_and_removed_correctly(self):
         self.source('a.pdf',['A','B']);result=self.make();out=self.folder/'000 Output'
         self.assertTrue(result['filename'].endswith('_1.pdf'))
-        self.assertFalse(list(out.glob('*.docx')));self.assertFalse(list(out.glob('.pending-*')))
+        self.assertFalse(list(out.glob('*.docx')));self.assertFalse(list((out/engine.INTERNAL).glob('.pending-*')))
         entry=self.scan()['entries'][0];self.assertEqual(entry['status'],'DONE')
         self.assertEqual(sum(o['pieces'] for o in entry['order_totals']),4)
         visible=self.scan()['outputs'][0];self.assertEqual(visible['sequence'],1)
@@ -77,7 +77,7 @@ class ExportTests(unittest.TestCase):
         self.source('a.pdf',['A'])
         with self.assertRaisesRegex(PackingError,'did not produce'):
             engine.generate(self.folder,self.selected(),output_format='pdf',verifier=lambda paths,export_pdf:[{'path':str(p),'pages':2} for p in paths])
-        out=self.folder/'000 Output';self.assertFalse((out/engine.HISTORY).exists());self.assertFalse(list(out.glob('.pending-*')))
+        out=self.folder/'000 Output';self.assertFalse((out/engine.HISTORY).exists());self.assertFalse(list((out/engine.INTERNAL).glob('.pending-*')))
     def test_pdf_without_history_is_not_silently_ignored(self):
         self.source('a.pdf',['A']);result=self.make();out=self.folder/'000 Output'
         (out/engine.HISTORY).unlink();(out/engine.LOG).unlink()

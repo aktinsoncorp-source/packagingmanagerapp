@@ -74,7 +74,7 @@ class PackingTests(unittest.TestCase):
     def test_legacy_log_is_verified_and_links_saved_without_reprinting(self):
         shutil.copytree(ROOT/'20260926',self.folder,dirs_exist_ok=True)
         log = self.folder/'000 Output'/engine.LOG
-        before = file_hash(log)
+        before = file_hash(self.folder/'000 Output'/'Processed_Files.txt')
         entries = self.entries()
         self.assertEqual(len(entries),9)
         self.assertTrue(all(e['status']=='DONE' for e in entries))
@@ -150,8 +150,9 @@ class PackingTests(unittest.TestCase):
         history={'schema':1,'date':'20260926','sources':{},'orders':{},'outputs':{}}
         plan={'id':'test-recovery','files':[{'target':dest.name,'stage':dest.relative_to(out).as_posix(),'sha256':file_hash(dest)}],
               'history':history,'stage_dir':stage.name,'log':'Recovery test'}
-        engine.atomic_json(out/engine.JOURNAL,plan)
-        engine.recover(out);engine.recover(out)
+        engine.atomic_json(out/'.packing-transaction.json',plan)
+        with engine.folder_lock(self.folder):
+            engine.recover(out);engine.recover(out)
         self.assertTrue((out/dest.name).exists())
         self.assertFalse((out/engine.JOURNAL).exists())
         self.assertEqual((out/engine.LOG).read_text().count('Transaction: test-recovery'),1)

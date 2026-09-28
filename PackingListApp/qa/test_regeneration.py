@@ -141,7 +141,7 @@ class RegenerationTests(unittest.TestCase):
         self.source('one.pdf', ['A'])
         out = self.folder / '000 Output'
         out.mkdir()
-        (out / engine.LOG).write_text('PACKING LIST PROCESSING LOG\n\nSPX_Packing_Checklist_2026-09-26_1.docx\nStatus: Completed\n  - SPX/one.pdf | 1 orders\n')
+        (out / 'Processed_Files.txt').write_text('PACKING LIST PROCESSING LOG\n\nSPX_Packing_Checklist_2026-09-26_1.docx\nStatus: Completed\n  - SPX/one.pdf | 1 orders\n')
         self.assertEqual(self.scan()['entries'][0]['status'], 'MISSING')
         second = self.generate()[0]
         self.assertTrue(second['filename'].endswith('_1.docx'))

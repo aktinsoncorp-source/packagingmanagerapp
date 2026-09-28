@@ -21,11 +21,13 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.10.0'
-HISTORY = 'Processing_History.json'
-LOG = 'Processed_Files.txt'
-JOURNAL = '.packing-transaction.json'
-COURIERS = 'Courier_Selections.json'
+VERSION = '1.11.0'
+INTERNAL = '.PackingData'
+HISTORY = INTERNAL + '/Processing_History.json'
+LOG = INTERNAL + '/Processed_Files.txt'
+JOURNAL = INTERNAL + '/.packing-transaction.json'
+COURIERS = INTERNAL + '/Courier_Selections.json'
+LOCK = INTERNAL + '/.packing.lock'
 
 
 def natural(value):
@@ -59,29 +61,76 @@ def atomic_json(path, value):
     os.replace(temp, path)
 
 
+def internal_directory(out):
+    """Persistent processing records, hidden in normal Windows Explorer views."""
+    internal = safe_child(out, INTERNAL)
+    internal.mkdir(parents=True, exist_ok=True)
+    if os.name == 'nt':
+        import ctypes
+        import stat
+        attributes = internal.stat().st_file_attributes
+        if not attributes & stat.FILE_ATTRIBUTE_HIDDEN:
+            kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel32.SetFileAttributesW.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32]
+            kernel32.SetFileAttributesW.restype = ctypes.c_int
+            if not kernel32.SetFileAttributesW(str(internal), attributes | stat.FILE_ATTRIBUTE_HIDDEN):
+                raise PackingError(f'Cannot hide the internal processing folder: {ctypes.WinError(ctypes.get_last_error())}')
+    return internal
+
+
+def migrate_internal_records(out):
+    # Called while locked. Check every collision before moving anything. Atomic
+    # renames also make a partly completed migration safe to resume after a crash.
+    moves = []
+    for relative in (HISTORY, LOG, JOURNAL, COURIERS):
+        source, target = out / Path(relative).name, out / relative
+        if source.exists():
+            if target.exists() and file_hash(source) != file_hash(target):
+                raise PackingError(f'Two different copies of {source.name} exist in 000 Output and {INTERNAL}. Keep both and ask your supervisor to review them.')
+            moves.append((source, target))
+    for source, target in moves:
+        if target.exists():
+            source.unlink()  # Identical duplicate already verified above.
+        else:
+            os.rename(source, target)
+
+
 @contextmanager
-def folder_lock(folder):
-    out = folder / '000 Output'
-    out.mkdir(parents=True, exist_ok=True)
-    lock = (out / '.packing.lock').open('a+b')
+def file_lock(path):
+    lock = path.open('a+b')
     try:
         import msvcrt
-        lock.seek(0)
-        if not lock.read(1):
-            lock.write(b'0')
-            lock.flush()
         lock.seek(0)
         try:
             msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError:
             raise PackingError('This date is being processed in another window. Wait for it to finish.')
         try:
-            yield out
+            if os.fstat(lock.fileno()).st_size == 0:
+                lock.write(b'0')
+                lock.flush()
+            yield
         finally:
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
     finally:
         lock.close()
+
+
+@contextmanager
+def folder_lock(folder):
+    out = folder / '000 Output'
+    internal_directory(out)
+    with file_lock(out / LOCK):
+        legacy_lock = out / '.packing.lock'
+        if legacy_lock.exists():
+            # Refuse migration while an older engine still owns the old lock.
+            with file_lock(legacy_lock):
+                migrate_internal_records(out)
+            legacy_lock.unlink()
+        else:
+            migrate_internal_records(out)
+        yield out
 
 
 def safe_child(out, relative):
@@ -128,7 +177,7 @@ def recover(out):
 
 def commit(out, history, files, stage, log):
     plan = {'id': uuid.uuid4().hex, 'history': history, 'files': files,
-            'stage_dir': stage.name, 'log': log}
+            'stage_dir': stage.relative_to(out).as_posix(), 'log': log}
     atomic_json(out / JOURNAL, plan)
     recover(out)
 
@@ -592,7 +641,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
         for key, batch in chosen:
             # Revisions have a distinct file from genuinely new orders.
             grouped[(batch.group, modes[key])].append((key, batch))
-        stage = out / ('.pending-' + uuid.uuid4().hex)
+        stage = out / INTERNAL / ('.pending-' + uuid.uuid4().hex)
         stage.mkdir()
         files, plans, reserved = [], [], set()
         new_history = copy.deepcopy(history)
@@ -747,7 +796,7 @@ def acknowledge(folder, selection):
                                   'order_keys': [o.key for o in batch.orders], 'outputs': entry['outputs'],
                                   'ignored_changes': True,
                                   'note': 'Changed file reviewed and ignored; use the earlier output'}
-        stage = out / ('.pending-' + uuid.uuid4().hex)
+        stage = out / INTERNAL / ('.pending-' + uuid.uuid4().hex)
         stage.mkdir()
         commit(out, history, [], stage,
                f'CHANGED FILE REVIEW {datetime.now().isoformat(timespec="seconds")}\n'

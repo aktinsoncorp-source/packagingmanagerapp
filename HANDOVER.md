@@ -1,12 +1,13 @@
-# Packing List Manager 1.10.0 handover
+# Packing List Manager 1.11.0 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.10.0. The preceding installed 1.9.0 release,
-including its private catalog, is preserved in PackingListApp/qa/previous-release-1.9.0.
+The executable and engine are version 1.11.0. The preceding installed 1.10.0 release,
+including its private catalog, is preserved in PackingListApp/qa/previous-release-1.10.0.
+The 1.9.0 backup remains in PackingListApp/qa/previous-release-1.9.0.
 The 1.8.0 backup remains in PackingListApp/qa/previous-release-1.8.0.
 The 1.7.0 backup remains in PackingListApp/qa/previous-release-1.7.0.
 The 1.6.1 backup remains in PackingListApp/qa/previous-release-1.6.1.
@@ -287,6 +288,37 @@ Verification September 28:
   ProductNames.json, its backup and Settings.json were preserved. Report:
   qa/release-1.10-installation.json. No production documents were regenerated.
 - Local Git source/history checkpoint: Git/v1.10.0. Earlier version folders remain.
+
+## Version 1.11 hidden processing records
+
+- Processing_History.json, Processed_Files.txt and .packing.lock now live in the
+  Windows-hidden 000 Output/.PackingData folder, with courier choices, transaction
+  journals and new staging folders. The folder is persistent, not disposable temp data.
+- Generated PDFs and historical Word documents remain directly in 000 Output.
+  Open processing log opens the hidden log. No Explorer settings were changed.
+- Scanning an existing date migrates root records under the new and legacy locks.
+  Renames can resume after interruption. Identical leftovers are removed; conflicting
+  copies stop before movement. Existing root-stage journals remain recoverable.
+- All 113 regression tests passed in 72.6 seconds: qa/release-1.11-tests.log. New tests
+  cover exact record preservation, hidden attributes, partial migration, conflict and
+  duplicate handling, legacy/current lock exclusion and hidden-stage recovery.
+- Packaged checks passed on copied 1.10 output: all four internal files migrated with
+  exact bytes, PDFs remained unchanged during migration, No skipped existing orders,
+  deleted SPX outputs regenerated as _1.pdf, and the final three outputs retained
+  17 orders/30 pieces. Main UI checks for couriers, check-all and totals passed.
+  Report: qa/release-1.11-verification.json; fixture: qa/release111-0o7p5asv.
+- Installation verified 297 engine files plus executable, icon and employee guide;
+  private catalog, catalog backup and settings were unchanged. Report:
+  qa/release-1.11-installation.json.
+- Live ONLINE SHOPS dates 20260924, 20260925, 20260926 and 20260928 were migrated.
+  All 12 internal records retained exact hashes; all 13 completed documents retained
+  exact hashes. No live packing documents were regenerated. Metadata backups are in
+  qa/metadata-backup-1.10.0, one folder per date. Report:
+  qa/release-1.11-live-migration.json.
+- Copy the entire dated folder including .PackingData for business backups/transfers.
+  Older executables do not understand the new location; do not run them against a
+  migrated date without a deliberate storage rollback plan preserving current history.
+- Local source/history checkpoint: Git/v1.11.0; previous checkpoints are preserved.
 
 ## Maintenance
 
