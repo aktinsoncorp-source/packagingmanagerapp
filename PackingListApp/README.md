@@ -311,3 +311,12 @@ previously prevented opening exports containing individually locked rows.
 The overall editing gate and row/import protection remain unchanged.
 qa/LockedExportSmoke.cs reproduces the old AutoFit failure and verifies mixed,
 all-locked and unlocked export/import sessions using actual Excel.
+
+## Define Name opening lock defaults (1.11.1)
+
+Constructor Fill(..., opening=true) copies catalog rows and assigns the initial
+lock from both alternative fields being nonblank. Later Fill calls retain saved
+session choices, so explicit unlocks work through save and Excel export. Opening
+the dialog does not mutate catalog objects or write private data by itself.
+DefaultLocksSmoke.cs checks complete, partial and whitespace pairs;
+LockedExportSmoke.cs verifies default locking and 17 real Excel round-trip checks.

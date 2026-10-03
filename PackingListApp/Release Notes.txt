@@ -1,3 +1,4 @@
 Version 1.11.1
 
-- Export Define Name to Excel even when some or all rows are individually locked; finished rows remain protected from edits.
+- Define Name opens complete alternative name/variation pairs locked; incomplete pairs start unlocked.
+- Individually locked rows export to Excel and remain protected from edits.

@@ -473,3 +473,12 @@ You can export all definitions even when individual rows are locked. Locked
 rows remain protected in Excel; unlocked rows can be edited and imported.
 There is no need to unlock finished rows before exporting. Use the overall
 open-padlock control to enable the Excel editing session as usual.
+
+Individual lock defaults
+Each time Define Name opens, a row starts locked when both the alternative
+product name and alternative variation are filled. If either field is blank,
+it starts unlocked. You can explicitly unlock a finished row to edit it during
+that session. Saving or exporting preserves your current session choices;
+opening Define Name again applies the default protection for finished rows.
+All rows are included in Excel export. Protected sheets use their saved row
+heights, avoiding the Excel AutoFit error.

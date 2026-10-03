@@ -41,6 +41,9 @@ namespace PackingListManager {
             using(var form=new NameDefinitionsForm(data,Call)) {
                 form.SuppressDialogs=true;form.StartPosition=FormStartPosition.Manual;form.Location=new System.Drawing.Point(-30000,-30000);form.Show();
                 Check(form.SetEditLocked(false),"Unlock overall editing; individual locks remain");
+                var grid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
+                Check(grid.Rows[0].Cells[0].ReadOnly&&grid.Rows[1].Cells[0].ReadOnly,"Complete alternatives default locked");
+                Check(form.SetRowLocked(grid.Rows[1],false),"Explicitly unlock one completed definition");
                 Check(await form.ExportToExcel(),"Mixed locked/unlocked definitions export: "+form.LastError);
                 var sheet=form.excel.Workbook.Worksheets["Names"];
                 Check((bool)sheet.ProtectContents,"Export retains worksheet protection");

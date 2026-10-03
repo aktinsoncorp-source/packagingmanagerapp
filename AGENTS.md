@@ -40,3 +40,5 @@
 - Define Name product headings sort A-Z/Z-A; variation headings sort recognized mL/L and g/kg sizes ascending/descending within unit families. Show row numbers, persistent entire-definition row locks, all-lock/unlock icons beside original product names, and yellow unsaved-row highlighting. Locked definitions and linked originals cannot be edited/deleted/merged through the UI or Excel until explicitly unlocked. Correct invalid leading spaces/symbols in alternatives automatically; retain independent blank fallback and single-line validation.
 
 - Define Name Excel export must include all rows even when individual rows are locked. Preserve cell protection and import validation; do not unlock finished definitions to export. Skip formatting operations that Excel disallows on protected worksheets.
+
+- When Define Name opens, individual rows default locked only when both alternative product name and alternative variation are nonblank; blank or partial pairs start unlocked. Explicit row unlocking remains effective for that session, including saves/exports. Reopening reapplies these completion-based defaults.

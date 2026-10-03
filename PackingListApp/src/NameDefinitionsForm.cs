@@ -110,7 +110,7 @@ namespace PackingListManager {
             importButton=Button("Import",85);importButton.Name="importNames";importButton.Click+=async(s,e)=>await ImportFromExcel();
             var close=Button("Close",95);close.Click+=(s,e)=>Close();layout.Controls.Add(buttons,0,3);
             message.Dock=DockStyle.Fill;message.Font=new Font("Segoe UI",9F);message.Text="Names are locked. Click the open-padlock icon to edit or use Excel.";layout.Controls.Add(message,0,4);Controls.Add(layout);
-            revision=Convert.ToInt32(catalog["revision"]);Fill(Rows(catalog["rows"]));RefreshExcelState();
+            revision=Convert.ToInt32(catalog["revision"]);Fill(Rows(catalog["rows"]),true);RefreshExcelState();
             Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}lockButton.Image.Dispose();unlockButton.Image.Dispose();rowClosed.Dispose();rowOpen.Dispose();lockTips.Dispose();};
             FormClosing+=async(s,e)=>{
                 if(working){e.Cancel=true;return;}
@@ -133,11 +133,17 @@ namespace PackingListManager {
         static List<Dictionary<string,object>> Rows(object value) {
             return ((System.Collections.IEnumerable)value).Cast<object>().Cast<Dictionary<string,object>>().ToList();
         }
-        void Fill(List<Dictionary<string,object>> rows) {
+        void Fill(List<Dictionary<string,object>> rows,bool opening=false) {
             loading=true;
             try {
                 selectionOrder.Clear();savedRows.Clear();lockedRows.Clear();grid.Rows.Clear();
-                foreach(var row in rows){int i=grid.Rows.Add(fields.Select(f=>row[f]).Concat(new object[]{"View ("+(Aliases(row).Count+1)+")"}).ToArray());grid.Rows[i].Tag=row;if(row.ContainsKey("locked")&&Convert.ToBoolean(row["locked"]))lockedRows.Add(grid.Rows[i]);ApplyRowLock(grid.Rows[i]);savedRows[grid.Rows[i]]=RowSignature(grid.Rows[i]);}
+                foreach(var source in rows){
+                    var row=new Dictionary<string,object>(source);
+                    if(opening)row["locked"]=!String.IsNullOrWhiteSpace(Convert.ToString(row["alternative_product"]))&&!String.IsNullOrWhiteSpace(Convert.ToString(row["alternative_variation"]));
+                    int i=grid.Rows.Add(fields.Select(f=>row[f]).Concat(new object[]{"View ("+(Aliases(row).Count+1)+")"}).ToArray());
+                    grid.Rows[i].Tag=row;if(row.ContainsKey("locked")&&Convert.ToBoolean(row["locked"]))lockedRows.Add(grid.Rows[i]);
+                    ApplyRowLock(grid.Rows[i]);savedRows[grid.Rows[i]]=RowSignature(grid.Rows[i]);
+                }
                 grid.ClearSelection();
             }
             finally {loading=false;}
