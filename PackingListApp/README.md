@@ -331,3 +331,17 @@ shared value still propagates. Matching new definitions use the existing app mer
 confirmation and Excel row priority. Locked originals cannot be separated by editing
 the workbook. Import remains a preview until the app saves the prepared definitions.
 134 regressions and 28 actual Excel/form checks passed, including both merge choices.
+
+## Pasted inventory identities (1.11.1)
+
+Import first reads all visible original pairs. When a row's hidden ID points to an
+original still visible elsewhere, match the current visible pair instead; new pairs
+are additions. Genuine original renames retain their hidden identity. Pasted/reordered
+lists preserve complete alternative pairs, separating differing linked values before
+app merge confirmation. Ordinary shared single-cell edits retain propagation. Invalid
+IDs recover only with an exact visible match; true duplicate updates report both row
+numbers. Locks are enforced against the correctly matched original. Excel filter sorts
+include A:F to move hidden identities with the visible columns.
+144 regressions passed. The failed inventory workbook's 1,145 unique originals and
+all alternative pairs passed packaged import/prepare/save against an isolated catalog;
+314 stale row IDs repaired, 831 additions, two differing linked definitions separated.

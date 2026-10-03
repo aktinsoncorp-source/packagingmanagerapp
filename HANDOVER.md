@@ -403,3 +403,24 @@ Locked originals stay protected, and validation errors do not write partial chan
 Evidence: qa/linked-import-20261004-*/result.json and qa/linked-import-installation.json.
 Final package: qa/LinkedImportRelease. Previous installation saved in
 qa/previous-release-1.11.1-before-linked-import-*. Local bundle ends in -LinkedImport.bundle.
+
+## Pasted inventory hidden-ID repair - October 4, 2026
+
+Version remains 1.11.1. The row 322 warning came from a 1,145-row inventory list
+pasted over the four visible columns while 314 earlier hidden IDs remained. Every
+saved original was present elsewhere. Import now matches those visible pairs,
+preserving genuine renames and locks. Pasted/reordered inventory alternatives stay
+with each original; two existing links separate instead of copying a kit or 25 kg
+alternative to a different item. Matching groups still require app confirmation.
+144 regressions passed. The actual edited workbook passed packaged import, prepare
+and save in an isolated catalog: 1,145 originals, 831 new originals, two separations,
+314 repaired row identities, all base IDs and alternative pairs retained.
+Source evidence/backup: qa/excel-identity-20261004-021615. Packaged evidence:
+qa/excel-identity-actual-packaged/result.json. Live Excel/form evidence:
+qa/excel-identity-live-*/result.json. Candidate: qa/ExcelIdentityRelease.
+Engine replacement can be loaded by the current app on its next Import call without
+closing its pending Excel session. Installation evidence: qa/excel-identity-installation.json.
+Local checkpoint bundle ends in -ExcelIdentity.bundle; earlier checkpoints retained.
+Installed and hash-verified 299 engine/help files; the running UI executable, saved
+catalog, catalog backup and settings stayed unchanged. 36 actual Excel/form checks
+passed. The user can retry Import in the current Excel session without restarting.

@@ -1,3 +1,3 @@
 Version 1.11.1
 
-- Conflicting linked Excel edits import as separate definitions; matching names merge with confirmation in the app.
+- Pasted inventory lists import correctly when older hidden row IDs remain; saved originals and row locks are preserved.

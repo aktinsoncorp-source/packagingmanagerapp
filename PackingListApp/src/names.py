@@ -283,7 +283,7 @@ def export_excel(path, catalog):
         ws.column_dimensions[column].width = width
     ws.column_dimensions['E'].hidden = ws.column_dimensions['F'].hidden = True
     ws.freeze_panes = 'A2'
-    ws.auto_filter.ref = f'A1:D{max(1, ws.max_row)}'
+    ws.auto_filter.ref = f'A1:F{max(1, ws.max_row)}'
     ws['A1'].comment = Comment('Each linked original pair has its own Excel row so all originals can be edited. Linked originals normally stay one definition; different new alternatives separate them on import. Hidden IDs preserve originals when names change. Missing rows are retained; delete definitions in Define Name. Names become UPPERCASE, trailing spaces are removed, and paragraphs/line breaks are rejected.', 'Packing List Manager')
     for cell in ('C1', 'D1'):
         ws[cell].comment = Comment('Blank uses the original field. Start with a letter or number. One changed alternative updates the linked definition. Different new alternatives separate the original pairs on import, preserving each Excel row. Matching definitions are merged only after confirmation in the app. Keep this workbook OPEN and click Import in Define Name.', 'Packing List Manager')
@@ -309,9 +309,11 @@ def import_excel(path, current_rows):
     rows = validate_rows(copy.deepcopy(current_rows))
     by_id = {r['id']: i for i, r in enumerate(rows)}
     by_key = {item_key(s['original_product'], s['original_variation']): i for i, r in enumerate(rows) for s in source_pairs(r)}
-    replacements, alt_edits, alternatives, additions, targets = {}, {}, {}, [], set()
+    replacements, alt_edits, alternatives, additions, targets = {}, {}, {}, [], {}
     priority = []
     updated = set()
+    repaired = 0
+    reordered = False
     try:
         wb = load_workbook(path, read_only=True, data_only=False, keep_links=False)
         try:
@@ -324,6 +326,7 @@ def import_excel(path, current_rows):
                 raise PackingError('Keep the four column headings from a Define Name export.')
             has_ids = ws.cell(1, 5).value == HEADERS[4]
             has_pairs = ws.cell(1, 6).value == HEADERS[5]
+            records, workbook_keys = [], set()
             for number, cells in enumerate(ws.iter_rows(min_row=2, max_col=6), 2):
                 if not any(c.value is not None and c.value != '' for c in cells[:4]):
                     continue
@@ -337,23 +340,50 @@ def import_excel(path, current_rows):
                 row = validate_rows([dict(zip(FIELDS, values))])[0]
                 identifier = str(cells[4].value or '') if has_ids else ''
                 key = item_key(row['original_product'], row['original_variation'])
+                records.append((number, row, identifier, key, cells[5].value if has_pairs else None))
+                workbook_keys.add(key)
+            for number, row, identifier, key, pair_id in records:
                 target = by_id.get(identifier) if identifier in by_id else by_key.get(key)
+                old_key = None
+                record_repaired = False
+                if target is not None:
+                    existing = rows[target]
+                    old_keys = {item_key(s['original_product'], s['original_variation']) for s in source_pairs(existing)}
+                    if pair_id and identifier in by_id:
+                        try:
+                            old = json.loads(pair_id)
+                            if not isinstance(old, list) or len(old) != 2 or not all(isinstance(v, str) for v in old):
+                                raise ValueError('invalid pair')
+                            old_key = item_key(*old)
+                        except (TypeError, ValueError):
+                            if key not in by_key:
+                                raise PackingError(f'Excel row {number}: the original-pair ID is invalid and this new name cannot be matched safely. Keep your edits and correct this row from a fresh export.')
+                            target, old_key = by_key[key], key
+                            record_repaired = True
+                    else:
+                        old_key = key if key in old_keys else item_key(existing['original_product'], existing['original_variation'])
+                    if old_key != key and old_key in workbook_keys:
+                        # Pasting/sorting just the visible columns can leave an
+                        # earlier row's IDs behind. Its original still has a
+                        # visible row, so this is not a rename of that original.
+                        target, old_key = by_key.get(key), key
+                        record_repaired = True
+                        reordered = True
+                    elif old_key not in old_keys:
+                        if key not in by_key:
+                            raise PackingError(f'Excel row {number}: the hidden original ID does not match a saved original. Keep your edits and correct this row from a fresh export.')
+                        target, old_key = by_key[key], key
+                        record_repaired = True
+                repaired += int(record_repaired)
                 if target is None:
                     additions.append(row)
                     priority.append(row['id'])
                     continue
                 existing = rows[target]
-                old_keys = {item_key(s['original_product'], s['original_variation']) for s in source_pairs(existing)}
-                if has_pairs and cells[5].value and identifier in by_id:
-                    old = json.loads(cells[5].value)
-                    if not isinstance(old, list) or len(old) != 2 or not all(isinstance(v, str) for v in old):
-                        raise PackingError(f'Excel row {number}: invalid original-pair ID. Start with a fresh export.')
-                    old_key = item_key(*old)
-                else:
-                    old_key = key if key in old_keys else item_key(existing['original_product'], existing['original_variation'])
-                if old_key not in old_keys or (target, old_key) in targets:
-                    raise PackingError(f'Excel row {number}: two rows update the same original, or its hidden ID is invalid.')
-                targets.add((target, old_key))
+                if (target, old_key) in targets:
+                    earlier = targets[(target, old_key)]
+                    raise PackingError(f'Excel rows {earlier} and {number}: both update the same original product and variation. Keep one row for this original; merge different originals in the app.')
+                targets[(target, old_key)] = number
                 priority.append((target, old_key))
                 if existing.get('locked'):
                     original = next(s for s in source_pairs(existing) if item_key(s['original_product'], s['original_variation']) == old_key)
@@ -378,6 +408,10 @@ def import_excel(path, current_rows):
         # originals receive distinct new values, keep their complete Excel
         # pairs together instead of combining fields or rejecting the import.
         split = any(len(alt_edits.get((target, field), ())) > 1 for field in FIELDS[2:])
+        if reordered:
+            # A pasted/reordered inventory list states complete per-original
+            # alternatives. Do not turn its sizes/names into a shared edit.
+            split |= len({alternatives.get((target, item_key(s['original_product'], s['original_variation'])), tuple(row[f] for f in FIELDS[2:])) for s in source_pairs(row)}) > 1
         shared = tuple(next(iter(alt_edits[(target, field)])) if not split and (target, field) in alt_edits else row[field] for field in FIELDS[2:])
         groups = {}
         for source in source_pairs(row):
@@ -395,4 +429,4 @@ def import_excel(path, current_rows):
             for old_key, _ in originals:
                 routed[(target, old_key)] = definition['id']
     priority = [routed[p] if isinstance(p, tuple) else p for p in priority]
-    return {'ok': True, 'rows': validate_rows(imported + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated), 'separated': separated}
+    return {'ok': True, 'rows': validate_rows(imported + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated), 'separated': separated, 'repaired': repaired}

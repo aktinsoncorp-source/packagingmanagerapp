@@ -391,6 +391,11 @@ Desktop Microsoft Excel is required for these two small buttons.
    linked, and omitted pairs keep their previous alternatives. Matching new
    definitions merge only after confirmation in the app.
    Omitted Excel rows remain in memory; delete definitions through the program.
+   You can paste a larger inventory list into the four visible columns. If older
+   originals are still present elsewhere in that list, leftover row IDs are
+   corrected automatically. Existing locked originals remain protected.
+   Pasted/reordered lists keep each original's complete alternative name and
+   variation; differing pairs separate before any merge confirmation.
 5. KEEP THE EXCEL WORKBOOK OPEN. Finish editing the cell, then click Import.
    The program saves Excel, normalizes/validates all names, asks about any new
    matching definitions, and saves. It closes only that workbook, deletes its

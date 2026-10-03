@@ -17,7 +17,7 @@ namespace PackingListManager {
             Application.EnableVisualStyles();
             var host=new Form {ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new System.Drawing.Point(-30000,-30000)};
             host.Shown+=async(s,e)=>{
-                try {await Test(false);await Test(true);File.WriteAllText(Path.Combine(work,"result.json"),json.Serialize(new{ok=true,checks=checks}));}
+                try {await Test(false);await Test(true);await TestPaste();File.WriteAllText(Path.Combine(work,"result.json"),json.Serialize(new{ok=true,checks=checks}));}
                 catch(Exception ex){File.WriteAllText(Path.Combine(work,"result.json"),json.Serialize(new{ok=false,error=ex.ToString(),checks=checks}));}
                 finally{host.Close();}
             };
@@ -65,6 +65,27 @@ namespace PackingListManager {
                 Check(json.Serialize(rows.Single(r=>Convert.ToString(r["id"])=="locked"))==json.Serialize(locked),"Finished locked definition unchanged");
                 Check(rows.Sum(r=>1+Rows(r["aliases"]).Count)==4,"Every original pair preserved");
                 Check(form.excel==null,"Successful import closes temporary session");
+                form.SetEditLocked(true);form.Close();
+            }
+        }
+        static async Task TestPaste() {
+            catalog=Path.Combine(work,"pasted.json");
+            var data=await Call(new Dictionary<string,object>{{"action","names_save"},{"revision",0},{"rows",new object[]{
+                new {id="base",original_product="A BASE",original_variation="SMALL",alternative_product="STANDARD",alternative_variation="100ML",locked=false,aliases=new[]{new {original_product="B LINK",original_variation="SMALL"}}},
+                new {id="other",original_product="C ORIGINAL",original_variation="BIG",alternative_product="OTHER",alternative_variation="1L",locked=false}}}});
+            using(var form=new NameDefinitionsForm(data,Call)) {
+                form.SuppressDialogs=true;form.StartPosition=FormStartPosition.Manual;form.Location=new System.Drawing.Point(-30000,-30000);form.Show();
+                Check(form.SetEditLocked(false)&&form.SetAllRowLocks(false),"Unlock pasted-list Excel editing");
+                Check(await form.ExportToExcel(),"Export before visible-column paste");
+                var sheet=form.excel.Workbook.Worksheets["Names"];
+                sheet.Range["A2:D5"].Value2=new object[,]{{"NEW ITEM","30ML","NEW","30ML"},{"C ORIGINAL","BIG","OTHER","1L"},{"A BASE","SMALL","STANDARD","100ML"},{"B LINK","SMALL","STANDARD","25KG"}};
+                Check(Convert.ToString(sheet.Range["E2"].Value2)=="base","Paste leaves old hidden ID behind");
+                Check(await form.ImportFromExcel(),"Pasted inventory imports without stale-ID warning: "+form.LastError);
+                var rows=Rows(json.Deserialize<Dictionary<string,object>>(File.ReadAllText(catalog))["rows"]);
+                Check(rows.Count==4&&rows.Sum(r=>1+Rows(r["aliases"]).Count)==4,"All pasted originals saved once");
+                Check(Convert.ToString(rows.Single(r=>Convert.ToString(r["id"])=="base")["alternative_variation"])=="100ML","Original base keeps ID and its own size");
+                Check(Convert.ToString(rows.Single(r=>Convert.ToString(r["original_product"])=="B LINK")["alternative_variation"])=="25KG","Pasted linked original keeps its different size");
+                Check(form.excel==null,"Pasted workbook closes after successful import");
                 form.SetEditLocked(true);form.Close();
             }
         }
