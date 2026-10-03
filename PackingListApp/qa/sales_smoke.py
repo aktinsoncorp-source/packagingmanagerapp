@@ -32,6 +32,10 @@ book=load_workbook(result['path'],data_only=False)
 assert book.sheetnames==['Item Sales','Order Items','Export Info']
 assert sum(row[3] for row in list(book['Item Sales'].values)[1:])==30
 assert sum(row[8] for row in list(book['Order Items'].values)[1:])==30
+details=list(book['Order Items'].values)[1:]
+assert all(row[-1] is not None for row in details if row[1]=='SHOPEE')
+assert all(row[-1] is None for row in details if row[1] in ('LAZADA','TIKTOK'))
+assert any(row[-1]==300 for row in details)
 assert all(cell.data_type!='f' for sheet in book for row in sheet for cell in row)
 book.close()
 assert call('scan')['entries']==scan['entries']

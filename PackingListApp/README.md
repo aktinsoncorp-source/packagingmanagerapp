@@ -273,3 +273,32 @@ The app uses its existing openpyxl dependency; Microsoft Excel is not required t
 create the workbook. Export opens it using the workstation's default spreadsheet app.
 QA: test_sales.py and sales_smoke.py cover quantities, aliases, duplicates, errors,
 numbering, unchanged history, packaged export and the actual Windows action.
+
+## Define Name controls and source prices (same version 1.11.1)
+
+The grid headers sort product names in either direction and compare mL/L or g/kg
+numerically for variation sorting (separate volume and mass families). Row headers
+show display numbers. Saved signatures highlight unsaved row edits yellow and reset
+on successful save. Invalid leading alternative characters are removed up to the
+first alphanumeric character in UI, prepare/save, and Excel import.
+
+Definitions now preserve a boolean locked field (older definitions default false).
+The existing overall lock remains separate and starts closed. Row locks cover all
+four names and aliases; two icons at the row-lock column header operate on all rows,
+including filtered rows. Save retains the lock state. Locked definitions cannot be
+deleted or modified while still locked, and are excluded from merge suggestions.
+Excel protects locked cells and import also checks linked originals server-side.
+Explicitly unlock and save edits before relocking a previously locked definition.
+
+Item.unit_price is an optional normalized decimal string, read from Shopee's Unit
+Price column. Existing quantity/name order fingerprints deliberately stay stable;
+original and printed output snapshots retain the additional price. Lazada/TikTok
+layouts without price fields keep None. The sales exporter independently rejects
+conflicting price copies. Summary unit_price is numeric only when every contributing
+unit has one consistent known price; price_status explains blanks. Order Items keeps
+each exact available unit price. No currency or sale price is invented.
+
+QA: 129 regressions; NameControlsSmoke.cs runs actual form sorting, locking, highlighting
+and save/reset checks. Packaged sales_smoke.py verifies source prices across platforms.
+A packaged Excel round trip confirmed locked cells reject edits and unlocked fields
+are auto-corrected. Existing packing PDF column layouts remain unchanged.

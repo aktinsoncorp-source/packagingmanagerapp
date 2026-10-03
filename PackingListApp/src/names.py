@@ -29,8 +29,9 @@ def validate_alternative(value, label):
     value = single_line(value, label)
     if not value:
         return value
-    if not value[0].isalnum():
-        raise PackingError(f'{label} must start with a letter or number, without a leading space or symbol.')
+    value = value[next((i for i, c in enumerate(value) if c.isalnum()), len(value)):]
+    if not value:
+        return ''
     if any(not (c.isalnum() or c in ALLOWED_SYMBOLS) for c in value):
         raise PackingError(f'{label} may contain letters, numbers, spaces, and these symbols: - ( ) / % . + , & apostrophe.')
     return value
@@ -59,6 +60,9 @@ def validate_rows(rows, allow_shared=False):
         entry = _source(row, label)
         for field in FIELDS[2:]:
             entry[field] = validate_alternative(row.get(field, ''), f'{label}: {field.replace("_", " ")}')
+        if not isinstance(row.get('locked', False), bool):
+            raise PackingError(f'{label}: invalid row lock.')
+        entry['locked'] = row.get('locked', False)
         entry['id'] = row.get('id') or uuid.uuid4().hex
         if not isinstance(entry['id'], str) or entry['id'] in ids:
             raise PackingError(f'{label}: duplicate or invalid entry identifier. Start with a fresh export.')
@@ -95,7 +99,7 @@ def prepare_save(rows, priority=()):
     rank = {identifier: index for index, identifier in enumerate(order)}
     groups = {}
     for row in sorted(validated, key=lambda r: rank.get(r['id'], len(rank))):
-        if row['alternative_product'] and row['alternative_variation']:
+        if not row.get('locked') and row['alternative_product'] and row['alternative_variation']:
             groups.setdefault((row['alternative_product'], row['alternative_variation']), []).append(row)
     matches = [{'ids': [r['id'] for r in group], 'alternative_product': key[0], 'alternative_variation': key[1],
                 'base_product': group[0]['original_product'], 'base_variation': group[0]['original_variation'],
@@ -113,6 +117,8 @@ def merge_rows(rows, groups):
             raise PackingError('Invalid merge selection.')
         if any(i not in by_id or i in consumed for i in identifiers):
             raise PackingError('The merge selection changed. Review the names again.')
+        if any(by_id[i].get('locked') for i in identifiers):
+            raise PackingError('Unlock each definition before merging its linked originals.')
         base = by_id[identifiers[0]]
         key = tuple(base[f] for f in FIELDS[2:])
         if not all(key) or any(tuple(by_id[i][f] for f in FIELDS[2:]) != key for i in identifiers):
@@ -192,6 +198,11 @@ def save_catalog(path, rows, revision, merge_groups=()):
         current = _load(path)
         if current['revision'] != revision:
             raise PackingError('The names list changed in another operation. Close Define Name, reopen it, and repeat your edits.')
+        incoming = {r['id']: r for r in validated}
+        for old in current['rows']:
+            new = incoming.get(old['id'])
+            if old.get('locked') and (new is None or (new.get('locked') and new != old)):
+                raise PackingError('Unlock the definition before changing or deleting its names.')
         if current['rows'] != validated:
             current = {'schema': 2, 'revision': revision + 1, 'rows': validated}
             _write(path, current)
@@ -222,8 +233,8 @@ def apply_names(batches, catalog):
     def display(item):
         row = mapping.get(item_key(item.product, item.variation), {})
         # The PDF item/fingerprint stays untouched. Only the printed copy changes.
-        return Item((row.get('alternative_product') or item_key(item.product, item.variation)[0]).rstrip(' ').upper(),
-                    (row.get('alternative_variation') or item_key(item.product, item.variation)[1]).rstrip(' ').upper(), item.pieces)
+        return replace(item, product=(row.get('alternative_product') or item_key(item.product, item.variation)[0]).rstrip(' ').upper(),
+                       variation=(row.get('alternative_variation') or item_key(item.product, item.variation)[1]).rstrip(' ').upper())
     return [replace(b, orders=[replace(o, items=[display(i) for i in o.items]) for o in b.orders]) for b in batches]
 
 
@@ -258,6 +269,16 @@ def export_excel(path, catalog):
                 cell.alignment = Alignment(wrap_text=True, vertical='top')
                 cell.fill = PatternFill('solid', fgColor='FFF7E8' if column in (3, 4) else ('F2F5F9' if number % 2 == 0 else 'FFFFFF'))
             ws.row_dimensions[number].height = 60
+    from openpyxl.styles import Protection
+    for cells in ws.iter_rows(min_row=2):
+        definition = next(r for r in catalog['rows'] if r['id'] == cells[4].value)
+        for cell in cells[:4]:
+            cell.protection = Protection(locked=bool(definition.get('locked')))
+    if any(r.get('locked') for r in catalog['rows']):
+        ws.protection.sheet = True
+        ws.protection.autoFilter = False
+        ws.protection.selectLockedCells = False
+        ws.protection.selectUnlockedCells = False
     for column, width in zip('ABCDEF', [72, 34, 48, 34, 36, 36]):
         ws.column_dimensions[column].width = width
     ws.column_dimensions['E'].hidden = ws.column_dimensions['F'].hidden = True
@@ -334,6 +355,10 @@ def import_excel(path, current_rows):
                 if old_key not in old_keys or (target, old_key) in targets:
                     raise PackingError(f'Excel row {number}: two rows update the same original, or its hidden ID is invalid.')
                 targets.add((target, old_key))
+                if existing.get('locked'):
+                    original = next(s for s in source_pairs(existing) if item_key(s['original_product'], s['original_variation']) == old_key)
+                    if key != item_key(original['original_product'], original['original_variation']) or any(row[f] != existing[f] for f in FIELDS[2:]):
+                        raise PackingError(f'Excel row {number}: this definition is locked. Unlock it in Define Name before editing.')
                 replacements[(target, old_key)] = {f: row[f] for f in FIELDS[:2]}
                 for field in FIELDS[2:]:
                     if row[field] != existing[field]:

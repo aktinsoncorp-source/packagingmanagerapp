@@ -37,6 +37,7 @@ class Item:
     product: str
     variation: str
     pieces: int
+    unit_price: str | None = None
 
 
 @dataclass
@@ -95,6 +96,17 @@ def region(page, left, top, right, bottom):
     return clean(part.extract_text(x_tolerance=1.5, y_tolerance=2))
 
 
+def source_price(value, context):
+    from decimal import Decimal
+    value = clean(value)
+    if not value or value in ('\u2014', '-', 'N/A'):
+        return None
+    # Read the printed unit value only; no assumed currency or derived price.
+    if not re.fullmatch(r'(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]{1,2})?', value):
+        raise PackingError(f'{context}: the unit price could not be read safely ({value!r}).')
+    return format(Decimal(value.replace(',', '')), '.2f')
+
+
 def positive_integer(value, context):
     value = clean(value)
     if not re.fullmatch(r'[0-9]+', value) or int(value) < 1:
@@ -140,6 +152,7 @@ def shopee_page(page, platform, page_num):
                     raise PackingError(f'Order {ids[0]}: missing {label} column.')
                 return matches[0]['x0'] - .25
             xproduct, xsku, xvar, xqty, xunit = [anchor(s) for s in ('Product', 'SKU', 'Variation', 'Qty', 'Unit')]
+            xtotal = anchor('Total')
             footer = [w for w in words if w['text'] == 'Order' and w['top'] > header_y]
             if len(footer) != 1:
                 raise PackingError(f'Order {ids[0]}: product table ending is unclear.')
@@ -162,7 +175,7 @@ def shopee_page(page, platform, page_num):
                 qty = positive_integer(region(p, xqty, y1, xunit, y2), f'Order {ids[0]}, item {index + 1}')
                 if not product:
                     raise PackingError(f'Order {ids[0]}: a product name is blank.')
-                items.append(Item(product, variation, qty))
+                items.append(Item(product, variation, qty, source_price(region(p, xunit, y1, xtotal, y2), f'Order {ids[0]}, item {index + 1}')))
             orders.append(ShopeePart(Order(platform, ids[0], items), numbers[0], numbers[-1]))
     return orders
 

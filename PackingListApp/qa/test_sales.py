@@ -51,7 +51,7 @@ class SalesTests(unittest.TestCase):
         self.source('LAZADA.pdf', 'LAZADA', [Order('LAZADA', '00001234567890123456789', [Item('Soap', 'Lemon', 4)])])
         result = self.export()
         self.assertEqual((result['orders'], result['quantity'], result['items']), (2, 10, 2))
-        self.assertEqual(self.read(result)[1:], [('2026-10-03', 'SOAP', 'LEMON', 7, 2, 3, 4, 0), ('2026-10-03', 'SOAP', 'ROSE', 3, 1, 3, 0, 0)])
+        self.assertEqual([row[:8] for row in self.read(result)[1:]], [('2026-10-03', 'SOAP', 'LEMON', 7, 2, 3, 4, 0), ('2026-10-03', 'SOAP', 'ROSE', 3, 1, 3, 0, 0)])
         detail = self.read(result, 'Order Items')
         self.assertEqual(len(detail), 5)
         self.assertEqual(detail[1][2], '00001234567890123456789')
@@ -67,7 +67,7 @@ class SalesTests(unittest.TestCase):
                     'aliases': [{'original_product': 'ALIAS', 'original_variation': 'L'}]}]}
         with patch.object(sales, 'load_catalog', return_value=catalog):
             result = self.export()
-        rows = self.read(result)
+        rows = [row[:8] for row in self.read(result)]
         self.assertIn(('2026-10-03', 'CLEANER', 'CITRUS', 5, 1, 5, 0, 0), rows)
         book = load_workbook(result['path'])
         try:
@@ -109,6 +109,18 @@ class SalesTests(unittest.TestCase):
                 self.export()
         self.assertFalse(list((self.folder / '000 Output').glob('*.xlsx')))
         self.assertFalse(list((self.folder / '000 Output' / engine.INTERNAL).glob('.sales-*')))
+
+    def test_exact_mixed_missing_and_duplicate_price_values(self):
+        self.source('one.pdf', 'SPX', [Order('SPX', 'A', [Item('Soap', 'Lemon', 2, '12.50')])])
+        result=self.export()
+        self.assertEqual(self.read(result)[1][8:], (12.5, 'Source unit price'))
+        self.assertEqual(self.read(result, 'Order Items')[1][-1], 12.5)
+        self.source('two.pdf', 'SPX', [Order('SPX', 'B', [Item('Soap', 'Lemon', 1, '15.00')])])
+        result=self.export()
+        self.assertEqual(self.read(result)[1][8:], (None, 'Multiple source prices; see Order Items'))
+        self.source('copy.pdf', 'SPX', [Order('SPX', 'A', [Item('Soap', 'Lemon', 2, '13.00')])])
+        with self.assertRaisesRegex(PackingError, 'Conflicting'):
+            self.export()
 
     def test_empty_date_makes_no_workbook(self):
         with self.assertRaisesRegex(PackingError, 'No readable'):

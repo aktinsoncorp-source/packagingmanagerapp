@@ -69,7 +69,7 @@ class MergeTests(unittest.TestCase):
         row=names.validate_rows([row])[0]
         self.assertEqual([row[f] for f in names.FIELDS],['ORIGINAL / A','LIGHT BLUE 1KG','STANDARD  NAME - (NEW)','1.5 L / 50%'])
         self.assertEqual(names.validate_alternative('   ','Alternative'),'')
-        with self.assertRaises(PackingError):names.validate_alternative(' leading','Alternative')
+        self.assertEqual(names.validate_alternative(' @ leading','Alternative'),'LEADING')
 
     def test_all_fields_reject_paragraph_and_control_characters(self):
         for field in names.FIELDS:

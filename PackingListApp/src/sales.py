@@ -1,6 +1,7 @@
 """Daily item quantities from current source PDFs, independent of packing/reprints."""
 from collections import defaultdict
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 import os
 import re
@@ -11,10 +12,10 @@ from extractors import PackingError, file_hash
 from names import apply_names, load_catalog
 
 SUMMARY_HEADERS = ['date', 'product_name', 'variation', 'quantity', 'order_count',
-                   'shopee_quantity', 'lazada_quantity', 'tiktok_quantity']
+                   'shopee_quantity', 'lazada_quantity', 'tiktok_quantity', 'unit_price', 'price_status']
 DETAIL_HEADERS = ['date', 'platform', 'order_id', 'line_number', 'original_product_name',
                   'original_variation', 'product_name', 'variation', 'quantity',
-                  'source_pdf', 'source_sha256', 'order_fingerprint']
+                  'source_pdf', 'source_sha256', 'order_fingerprint', 'unit_price']
 
 
 def export_sales(folder, catalog_path):
@@ -44,24 +45,34 @@ def export_sales(folder, catalog_path):
             batch = batches[key]
             for original, order in zip(batch.orders, named[key].orders):
                 fingerprint = original.fingerprint()
+                priced_fingerprint = (fingerprint, sorted((i.product, i.variation, i.pieces, i.unit_price or '') for i in original.items))
                 if original.key in seen:
-                    if seen[original.key] != fingerprint:
+                    if seen[original.key] != priced_fingerprint:
                         raise PackingError(f'Conflicting versions of order {original.order_id}; resolve its source PDFs first.')
                     continue
-                seen[original.key] = fingerprint
+                seen[original.key] = priced_fingerprint
                 platform = 'SHOPEE' if original.platform in ('SPX', 'FLASH', 'SHOPEE') else original.platform
                 for line, (raw, item) in enumerate(zip(original.items, order.items), 1):
                     pair = (item.product, item.variation)
-                    total = totals.setdefault(pair, {'quantity': 0, 'orders': set(), 'platforms': defaultdict(int)})
+                    total = totals.setdefault(pair, {'quantity': 0, 'orders': set(), 'platforms': defaultdict(int), 'prices': set(), 'priced_quantity': 0})
                     total['quantity'] += item.pieces
                     total['orders'].add(original.key)
                     total['platforms'][platform] += item.pieces
+                    if raw.unit_price is not None:
+                        total['prices'].add(Decimal(raw.unit_price))
+                        total['priced_quantity'] += item.pieces
                     details.append([day, platform, str(original.order_id), line, raw.product, raw.variation,
-                                    item.product, item.variation, item.pieces, key, batch.sha256, fingerprint])
+                                    item.product, item.variation, item.pieces, key, batch.sha256, fingerprint, float(raw.unit_price) if raw.unit_price is not None else None])
         if not details:
             raise PackingError('No readable packing orders to export for this date.')
+        def price_status(total):
+            if not total['prices']: return 'Not provided in source'
+            if len(total['prices']) > 1: return 'Multiple source prices; see Order Items'
+            if total['priced_quantity'] != total['quantity']: return 'Partial source price; see Order Items'
+            return 'Source unit price'
         summary = [[day, product, variation, total['quantity'], len(total['orders']),
-                    total['platforms']['SHOPEE'], total['platforms']['LAZADA'], total['platforms']['TIKTOK']]
+                    total['platforms']['SHOPEE'], total['platforms']['LAZADA'], total['platforms']['TIKTOK'],
+                    float(next(iter(total['prices']))) if len(total['prices']) == 1 and total['priced_quantity'] == total['quantity'] else None, price_status(total)]
                    for (product, variation), total in sorted(totals.items())]
         quantity = sum(row[3] for row in summary)
         if quantity != sum(row[8] for row in details):
@@ -72,7 +83,8 @@ def export_sales(folder, catalog_path):
             ['name_catalog_revision', catalog['revision']],
             ['exported_at', datetime.now().astimezone().isoformat(timespec='seconds')],
             ['scope', 'All readable packing PDFs in the selected dated folder, regardless of Use checkboxes or packing output status.'],
-            ['quantity_basis', 'Ordered units from packing PDFs; no prices, revenue, returns or cancellations are inferred.'],
+            ['quantity_basis', 'Ordered units from packing PDFs; revenue, returns and cancellations are not inferred.'],
+            ['price_basis', 'Unit prices are copied from source PDFs, not inferred. Blank means unavailable, mixed or partial; see Order Items for exact row prices. Currency is not assumed when absent from the source.'],
             ['date_basis', 'Selected source-folder date; not an inferred order/payment date.'],
             ['names', 'Current Define Name alternatives; blank fields retain original names. Original fields remain in Order Items.'],
             ['duplicates', 'Each platform/order ID counted once. SHOPEE combines SPX and FLASH. Matching source copies and reprints do not add sales.'],
@@ -90,6 +102,7 @@ def export_sales(folder, catalog_path):
                         if len(cell.value) > 32767:
                             raise PackingError('A source field exceeds the Excel cell limit.')
                         cell.data_type = 's'  # Preserve IDs/leading zeros and literal formula-like names.
+                    if headers[cell.column-1] == 'unit_price': cell.number_format = '#,##0.00'
                     cell.alignment = Alignment(vertical='top', wrap_text=True)
                 lines = max(len(textwrap.wrap(str(v), max(8, int(width * .85)))) or 1 for v, width in zip(row, widths))
                 ws.row_dimensions[ws.max_row].height = max(26, 15 * lines + 8)
@@ -111,8 +124,8 @@ def export_sales(folder, catalog_path):
             ws.page_setup.fitToHeight = 0
             ws.print_title_rows = '1:1'
             return ws
-        sheet('Item Sales', SUMMARY_HEADERS, summary, [14, 52, 34, 14, 14, 20, 20, 20], 'ItemSales')
-        sheet('Order Items', DETAIL_HEADERS, details, [14, 14, 24, 14, 52, 34, 52, 34, 14, 52, 68, 68], 'OrderItems')
+        sheet('Item Sales', SUMMARY_HEADERS, summary, [14, 52, 34, 14, 14, 20, 20, 20, 14, 36], 'ItemSales')
+        sheet('Order Items', DETAIL_HEADERS, details, [14, 14, 24, 14, 52, 34, 52, 34, 14, 52, 68, 68, 14], 'OrderItems')
         sheet('Export Info', ['field', 'value'], info, [28, 110], 'ExportInfo')
         prefix = f'{day}_Item_Sales_'
         numbers = [int(m[1]) for p in out.iterdir()

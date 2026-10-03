@@ -67,11 +67,16 @@ class NameTests(unittest.TestCase):
         self.assertEqual(picking_rows(printed), [('DISH SOAP', 'LEMON (1 L)', 5)])
 
     def test_validation_rejects_leading_spaces_symbols_and_controls(self):
-        for value in [' Soap', '-Soap', ' Soap ', '=SUM(A1)', 'Soap\nNew', 'Soap\tNew', 'Soap@Home']:
+        for value in ['Soap\nNew', 'Soap\tNew', 'Soap@Home']:
             with self.subTest(value=value), self.assertRaises(PackingError):
                 names.validate_alternative(value, 'Name')
         for value in ['', 'Soap - Lemon (1 L) / 50% + Oil', "Men's Soap, 1.5 L & Oil", '洗衣液 1L']:
             self.assertEqual(names.validate_alternative(value, 'Name'), value.upper())
+
+    def test_leading_characters_are_corrected(self):
+        for value in [' Soap', '-Soap', ' Soap ', '@#SOAP']:
+            self.assertEqual(names.validate_alternative(value, 'Name'), 'SOAP')
+        self.assertEqual(names.validate_alternative('---', 'Name'), '')
 
     def test_delete_stays_deleted_until_next_encounter_then_blank(self):
         data = self.defined()
@@ -87,7 +92,7 @@ class NameTests(unittest.TestCase):
     def test_invalid_save_and_stale_revision_preserve_file(self):
         data = self.seed()
         before = self.path.read_bytes()
-        data['rows'][0]['alternative_product'] = ' Bad'
+        data['rows'][0]['alternative_product'] = 'BAD@VALUE'
         with self.assertRaises(PackingError):
             names.save_catalog(self.path, data['rows'], data['revision'])
         self.assertEqual(self.path.read_bytes(), before)
@@ -142,7 +147,7 @@ class NameTests(unittest.TestCase):
 
     def test_excel_duplicates_and_formulas_rejected_without_partial_save(self):
         data = self.seed()
-        for mode in ['duplicate', 'formula', 'leading space', 'renamed collision']:
+        for mode in ['duplicate', 'formula', 'invalid symbol', 'renamed collision']:
             names.export_excel(self.book, data)
             wb = load_workbook(self.book)
             ws = wb['Names']
@@ -150,8 +155,8 @@ class NameTests(unittest.TestCase):
                 ws.append([ws.cell(2, col).value for col in range(1, 6)])
             elif mode == 'formula':
                 ws['C2'] = '=UPPER(A2)'
-            elif mode == 'leading space':
-                ws['C2'] = ' Invalid'
+            elif mode == 'invalid symbol':
+                ws['C2'] = 'INVALID@VALUE'
             else:
                 ws['A2'], ws['B2'] = ws['A3'].value, ws['B3'].value
             wb.save(self.book)

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -20,6 +22,9 @@ namespace PackingListManager {
         Button lockButton,unlockButton;
         readonly ToolTip lockTips=new ToolTip();
         Button saveButton,addButton,deleteButton,exportButton,importButton;
+        readonly Bitmap rowClosed=LockIcon(false),rowOpen=LockIcon(true);
+        readonly HashSet<DataGridViewRow> lockedRows=new HashSet<DataGridViewRow>();
+        readonly Dictionary<DataGridViewRow,string> savedRows=new Dictionary<DataGridViewRow,string>();
         readonly List<DataGridViewRow> selectionOrder=new List<DataGridViewRow>();
         internal Func<Dictionary<string,object>,bool> ConfirmMerge=null;
         internal NameExcelSession excel;
@@ -32,7 +37,7 @@ namespace PackingListManager {
             var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(20),ColumnCount=1,RowCount=5};
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute,62));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,48));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,46));
-            var note=new Label {Dock=DockStyle.Fill,Text="Names are UPPERCASE and single-line. Blank alternatives keep the original field. Matching alternatives can be merged when saving.\nSelect the base row first. Use View to see its linked originals. For Excel: Export, edit, keep Excel open, then Import."};
+            var note=new Label {Dock=DockStyle.Fill,Text="Click a name heading for A-Z / Z-A; click a variation heading for smallest / largest size. Yellow rows have unsaved changes.\nUnlock editing above, then use row padlocks or the two header padlocks for all rows. Blank alternatives keep the original field."};
             layout.Controls.Add(note,0,0);
             var find=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};
             find.Controls.Add(new Label {Text="Search",AutoSize=true,Margin=new Padding(0,6,10,0)});
@@ -42,7 +47,7 @@ namespace PackingListManager {
             lockTips.SetToolTip(lockButton,"Lock name editing");lockTips.SetToolTip(unlockButton,"Unlock name editing");
             lockButton.Click+=(s,e)=>SetEditLocked(true);unlockButton.Click+=(s,e)=>SetEditLocked(false);
             find.Controls.Add(lockButton);find.Controls.Add(unlockButton);layout.Controls.Add(find,0,1);
-            grid.Name="namesGrid";grid.Dock=DockStyle.Fill;grid.BackgroundColor=Color.White;grid.RowHeadersWidth=32;
+            grid.Name="namesGrid";grid.Dock=DockStyle.Fill;grid.BackgroundColor=Color.White;grid.RowHeadersWidth=52;
             grid.AllowUserToAddRows=true;grid.AllowUserToDeleteRows=false;grid.MultiSelect=true;grid.SelectionMode=DataGridViewSelectionMode.FullRowSelect;
             grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;grid.AutoSizeRowsMode=DataGridViewAutoSizeRowsMode.AllCells;
             grid.DefaultCellStyle.WrapMode=DataGridViewTriState.True;grid.DefaultCellStyle.Padding=new Padding(5);grid.DefaultCellStyle.SelectionForeColor=Color.Black;
@@ -57,6 +62,19 @@ namespace PackingListManager {
                 grid.Columns.Add(column);
             }
             grid.Columns.Add(new DataGridViewButtonColumn {Name="linkedOriginals",HeaderText="Original pairs",FillWeight=11F,ReadOnly=true,SortMode=DataGridViewColumnSortMode.NotSortable});
+            var rowLockColumn=new DataGridViewImageColumn {Name="rowLock",HeaderText="",Width=72,AutoSizeMode=DataGridViewAutoSizeColumnMode.None,ReadOnly=true,ImageLayout=DataGridViewImageCellLayout.Normal,SortMode=DataGridViewColumnSortMode.NotSortable};
+            rowLockColumn.DefaultCellStyle.NullValue=null;grid.Columns.Add(rowLockColumn);rowLockColumn.DisplayIndex=0;
+            rowLockColumn.HeaderCell.ToolTipText="Lock all rows (left padlock) / unlock all rows (right padlock)";
+            grid.CellPainting+=(s,e)=>{if(e.RowIndex>=0&&grid.Rows[e.RowIndex].IsNewRow&&e.ColumnIndex==grid.Columns["rowLock"].Index){e.PaintBackground(e.ClipBounds,false);e.Handled=true;return;}if(e.RowIndex==-1&&e.ColumnIndex==grid.Columns["rowLock"].Index){e.PaintBackground(e.ClipBounds,false);e.Graphics.DrawImage(rowClosed,e.CellBounds.Left+8,e.CellBounds.Top+8);e.Graphics.DrawImage(rowOpen,e.CellBounds.Left+39,e.CellBounds.Top+8);e.Handled=true;}};
+            grid.CellMouseClick+=(s,e)=>{if(e.ColumnIndex!=grid.Columns["rowLock"].Index)return;if(e.RowIndex==-1)SetAllRowLocks(e.X<36);else if(!grid.Rows[e.RowIndex].IsNewRow)SetRowLocked(grid.Rows[e.RowIndex],!lockedRows.Contains(grid.Rows[e.RowIndex]));};
+            grid.CellBeginEdit+=(s,e)=>{if(editLocked||lockedRows.Contains(grid.Rows[e.RowIndex]))e.Cancel=true;};
+            grid.SortCompare+=(s,e)=>{
+                bool variant=e.Column.Name.EndsWith("variation");
+                e.SortResult=variant?CompareVariation(Convert.ToString(e.CellValue1),Convert.ToString(e.CellValue2)):StringComparer.OrdinalIgnoreCase.Compare(Convert.ToString(e.CellValue1),Convert.ToString(e.CellValue2));
+                if(e.SortResult==0&&!variant){string field=e.Column.Name.StartsWith("alternative")?"alternative_variation":"original_variation";e.SortResult=CompareVariation(Convert.ToString(grid.Rows[e.RowIndex1].Cells[field].Value),Convert.ToString(grid.Rows[e.RowIndex2].Cells[field].Value));}
+                e.Handled=true;
+            };
+            grid.RowPostPaint+=(s,e)=>{if(!grid.Rows[e.RowIndex].IsNewRow)TextRenderer.DrawText(e.Graphics,(e.RowIndex+1).ToString(),grid.Font,new Rectangle(e.RowBounds.Left,e.RowBounds.Top,grid.RowHeadersWidth-5,e.RowBounds.Height),Color.DimGray,TextFormatFlags.Right|TextFormatFlags.VerticalCenter);};
             grid.CellContentClick+=(s,e)=>{if(e.RowIndex>=0&&e.ColumnIndex==4&&!grid.Rows[e.RowIndex].IsNewRow)ShowOriginals(grid.Rows[e.RowIndex]);};
             grid.EditingControlShowing+=(s,e)=>{var text=e.Control as TextBox;if(text!=null){text.CharacterCasing=CharacterCasing.Upper;text.Multiline=false;text.AcceptsReturn=false;}};
             grid.CellValidating+=(s,e)=>{
@@ -67,7 +85,7 @@ namespace PackingListManager {
                 if(e.RowIndex<0||e.ColumnIndex>=4)return;
                 var row=grid.Rows[e.RowIndex];row.ErrorText="";
                 var value=Convert.ToString(row.Cells[e.ColumnIndex].Value)??"";
-                row.Cells[e.ColumnIndex].Value=value.TrimEnd(' ').ToUpperInvariant();
+                row.Cells[e.ColumnIndex].Value=e.ColumnIndex>=2?CorrectAlternative(value):value.TrimEnd(' ').ToUpperInvariant();
             };
             grid.SelectionChanged+=(s,e)=>{
                 if(loading)return;
@@ -75,7 +93,7 @@ namespace PackingListManager {
                 if(grid.CurrentRow!=null&&grid.CurrentRow.Selected&&!grid.CurrentRow.IsNewRow&&!selectionOrder.Contains(grid.CurrentRow))selectionOrder.Add(grid.CurrentRow);
                 foreach(var row in grid.SelectedRows.Cast<DataGridViewRow>().Where(r=>!r.IsNewRow).OrderBy(r=>r.Index))if(!selectionOrder.Contains(row))selectionOrder.Add(row);
             };
-            grid.CellValueChanged+=(s,e)=>{if(!loading&&e.RowIndex>=0){dirty=true;message.Text="Unsaved changes. Click Save names to apply them.";}};
+            grid.CellValueChanged+=(s,e)=>{if(!loading&&e.RowIndex>=0){dirty=true;MarkChanged(grid.Rows[e.RowIndex]);message.Text="Unsaved changes are highlighted. Click Save names to apply them.";}};
             grid.UserAddedRow+=(s,e)=>{if(!loading)dirty=true;};
             grid.DataError+=(s,e)=>{e.ThrowException=false;message.Text="Please enter a single line of text in each name field.";};
             search.TextChanged+=(s,e)=>Filter();layout.Controls.Add(grid,0,2);
@@ -83,7 +101,7 @@ namespace PackingListManager {
             saveButton=Button("Save names",140);saveButton.BackColor=Color.FromArgb(25,87,157);saveButton.ForeColor=Color.White;saveButton.Click+=async(s,e)=>await SaveNames();
             addButton=Button("Add row",100);addButton.Click+=(s,e)=>{search.Clear();grid.CurrentCell=grid.Rows[grid.NewRowIndex].Cells[0];grid.BeginEdit(true);};
             deleteButton=Button("Delete selected",150);deleteButton.Click+=(s,e)=>{
-                var selected=grid.SelectedRows.Cast<DataGridViewRow>().Where(r=>!r.IsNewRow).ToArray();
+                var selected=grid.SelectedRows.Cast<DataGridViewRow>().Where(r=>!r.IsNewRow&&!lockedRows.Contains(r)).ToArray();
                 foreach(var row in selected)grid.Rows.Remove(row);
                 if(selected.Length>0){dirty=true;message.Text="Rows removed from this edit. Save names to delete them; a later PDF scan can add them back with blank alternatives.";Filter();}
             };
@@ -93,7 +111,7 @@ namespace PackingListManager {
             var close=Button("Close",95);close.Click+=(s,e)=>Close();layout.Controls.Add(buttons,0,3);
             message.Dock=DockStyle.Fill;message.Font=new Font("Segoe UI",9F);message.Text="Names are locked. Click the open-padlock icon to edit or use Excel.";layout.Controls.Add(message,0,4);Controls.Add(layout);
             revision=Convert.ToInt32(catalog["revision"]);Fill(Rows(catalog["rows"]));RefreshExcelState();
-            Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}lockButton.Image.Dispose();unlockButton.Image.Dispose();lockTips.Dispose();};
+            Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}lockButton.Image.Dispose();unlockButton.Image.Dispose();rowClosed.Dispose();rowOpen.Dispose();lockTips.Dispose();};
             FormClosing+=async(s,e)=>{
                 if(working){e.Cancel=true;return;}
                 grid.EndEdit();
@@ -118,8 +136,8 @@ namespace PackingListManager {
         void Fill(List<Dictionary<string,object>> rows) {
             loading=true;
             try {
-                selectionOrder.Clear();grid.Rows.Clear();
-                foreach(var row in rows){int i=grid.Rows.Add(fields.Select(f=>row[f]).Concat(new object[]{"View ("+(Aliases(row).Count+1)+")"}).ToArray());grid.Rows[i].Tag=row;}
+                selectionOrder.Clear();savedRows.Clear();lockedRows.Clear();grid.Rows.Clear();
+                foreach(var row in rows){int i=grid.Rows.Add(fields.Select(f=>row[f]).Concat(new object[]{"View ("+(Aliases(row).Count+1)+")"}).ToArray());grid.Rows[i].Tag=row;if(row.ContainsKey("locked")&&Convert.ToBoolean(row["locked"]))lockedRows.Add(grid.Rows[i]);ApplyRowLock(grid.Rows[i]);savedRows[grid.Rows[i]]=RowSignature(grid.Rows[i]);}
                 grid.ClearSelection();
             }
             finally {loading=false;}
@@ -136,9 +154,9 @@ namespace PackingListManager {
                 var entry=old==null?new Dictionary<string,object>{{"id",Guid.NewGuid().ToString("N")}}:new Dictionary<string,object>(old);
                 for(int i=0;i<4;i++) {
                     if(!SingleLine(values[i]))throw new Exception("Use one line only; paragraphs and line breaks are not allowed.");
-                    entry[fields[i]]=values[i].TrimEnd(' ').ToUpperInvariant();
+                    entry[fields[i]]=i>=2?CorrectAlternative(values[i]):values[i].TrimEnd(' ').ToUpperInvariant();
                 }
-                row.Tag=entry;result.Add(entry);
+                entry["locked"]=lockedRows.Contains(row);row.Tag=entry;result.Add(entry);
             }
             return result;
         }
@@ -190,6 +208,7 @@ namespace PackingListManager {
             lockButton.Enabled=!working&&!pending&&!editLocked;unlockButton.Enabled=!working&&!pending&&editLocked;
             lockButton.BackColor=editLocked?Color.FromArgb(248,203,173):Color.White;
             unlockButton.BackColor=editLocked?Color.White:Color.FromArgb(220,234,252);
+            foreach(DataGridViewRow row in grid.Rows)if(!row.IsNewRow)ApplyRowLock(row);
         }
         void ResetExcel(){if(excel!=null)excel.Dispose();excel=null;RefreshExcelState();}
         internal async Task<bool> ExportToExcel() {
@@ -217,6 +236,54 @@ namespace PackingListManager {
                 ResetExcel();message.Text="Excel names imported and saved: "+preview["added"]+" added, "+preview["updated"]+" updated. Temporary workbook closed and removed.";
             });
         }
+        void ApplyRowLock(DataGridViewRow row) {
+            bool locked=lockedRows.Contains(row);
+            foreach(string field in fields)row.Cells[field].ReadOnly=locked;
+            row.Cells["rowLock"].Value=locked?rowClosed:rowOpen;
+            row.Cells["rowLock"].ToolTipText=locked?"Unlock this definition":"Lock this definition";
+        }
+        internal bool SetRowLocked(DataGridViewRow row,bool value) {
+            if(editLocked||working||excel!=null||row.IsNewRow||!grid.EndEdit())return false;
+            string baseline;string current=RowSignature(row);
+            if(value&&savedRows.TryGetValue(row,out baseline)&&baseline.EndsWith("|True")&&baseline.Substring(0,baseline.LastIndexOf('|'))!=current.Substring(0,current.LastIndexOf('|'))){message.Text="Save this row before locking it again.";return false;}
+            if(value)lockedRows.Add(row);else lockedRows.Remove(row);
+            ApplyRowLock(row);dirty=true;MarkChanged(row);
+            message.Text="Row lock changed. Click Save names to keep this setting.";return true;
+        }
+        internal bool SetAllRowLocks(bool value) {
+            if(editLocked||working||excel!=null||!grid.EndEdit())return false;
+            bool complete=true;foreach(DataGridViewRow row in grid.Rows)if(!row.IsNewRow&&!SetRowLocked(row,value))complete=false;
+            if(!complete){message.Text="Save changed rows before locking all definitions.";return false;}
+            message.Text=value?"All rows locked. Save names to keep these settings.":"All rows unlocked. Save names to keep these settings.";return true;
+        }
+
+        internal static string CorrectAlternative(string value) {
+            value=value.TrimEnd(' ').ToUpperInvariant();int start=0;
+            while(start<value.Length&&!Char.IsLetterOrDigit(value[start]))start++;
+            return value.Substring(start);
+        }
+        internal static int CompareVariation(string a,string b) {
+            a=a??"";b=b??"";
+            var pattern=@"(?<![\d.])(\d+(?:[.,]\d+)?)\s*(ML|KG|L|G)\b";
+            var x=Regex.Match(a,pattern,RegexOptions.IgnoreCase);var y=Regex.Match(b,pattern,RegexOptions.IgnoreCase);
+            if(x.Success&&y.Success){
+                string xu=x.Groups[2].Value.ToUpperInvariant(),yu=y.Groups[2].Value.ToUpperInvariant();
+                int family=String.CompareOrdinal(xu.EndsWith("L")?"V":"M",yu.EndsWith("L")?"V":"M");
+                if(family!=0)return family;
+                double xv,yv;
+                if(!Double.TryParse(x.Groups[1].Value.Replace(',','.'),NumberStyles.Float,CultureInfo.InvariantCulture,out xv)||!Double.TryParse(y.Groups[1].Value.Replace(',','.'),NumberStyles.Float,CultureInfo.InvariantCulture,out yv))return StringComparer.OrdinalIgnoreCase.Compare(a,b);
+                xv*=xu=="L"||xu=="KG"?1000:1;yv*=yu=="L"||yu=="KG"?1000:1;
+                int size=xv.CompareTo(yv);if(size!=0)return size;
+            } else if(x.Success!=y.Success)return x.Success?-1:1;
+            return StringComparer.OrdinalIgnoreCase.Compare(a,b);
+        }
+        string RowSignature(DataGridViewRow row){return String.Join("\u001f",fields.Select(f=>Convert.ToString(row.Cells[f].Value)??""))+"|"+lockedRows.Contains(row);}
+        void MarkChanged(DataGridViewRow row) {
+            if(row.IsNewRow)return;
+            string saved;bool changed=!savedRows.TryGetValue(row,out saved)||saved!=RowSignature(row);
+            foreach(DataGridViewCell cell in row.Cells){cell.Style.BackColor=changed?Color.FromArgb(255,229,153):Color.Empty;cell.Style.SelectionBackColor=changed?Color.FromArgb(255,217,102):Color.Empty;}
+        }
+
         static bool SingleLine(string value){return !value.Any(c=>Char.IsControl(c)||c=='\u2028'||c=='\u2029');}
         static List<Dictionary<string,object>> Aliases(Dictionary<string,object> row){return row.ContainsKey("aliases")?Rows(row["aliases"]):new List<Dictionary<string,object>>();}
         void ShowOriginals(DataGridViewRow row) {

@@ -367,3 +367,19 @@ source present. Windows button and courier/totals checks passed. Excel opened th
 three sheets; Item Sales and Export Info rendering was inspected. Previous installed
 1.11.1 is preserved in qa/previous-release-1.11.1-before-sales. Prior Git/v1.11.1
 checkpoint files remain; the additional bundle ends in -ItemSales.bundle.
+
+## Same-version Define Name controls and source prices - October 3, 2026
+
+Added reversible product/size sorting, numbered rows, persistent whole-definition
+locks with all-row header controls, yellow dirty rows and leading-character cleanup.
+Source unit prices are included in the Excel sales export, using Shopee Unit Price;
+current Lazada/TikTok fixtures have no product prices. Original quantities and
+historical order fingerprints remain compatible. No manual price catalog added.
+129 tests passed. Actual naming-controls harness, protected Excel editing/import,
+and packaged 17-order / 30-unit sales checks passed. Excel price columns reviewed.
+Evidence: qa/names-controls-tests.log, qa/names-controls-final/result.txt,
+qa/names-excel-final/result.txt, qa/names-sales-smoke.log.
+Previous installed build will be retained in qa/previous-release-1.11.1-before-name-controls.
+Additional Git bundle: Git/v1.11.1/PackingListManager-1.11.1-NameControls.bundle.
+
+Final packaged packing generation also passed real Word A4/whole-order/summary validation (qa/names-packing-smoke.log). Installation verified 301 files; ProductNames.json, its backup and Settings.json retained their hashes. No production packing outputs were regenerated.
