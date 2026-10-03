@@ -30,6 +30,11 @@ class RowLockTests(unittest.TestCase):
     def test_unchanged_locked_excel_round_trip(self):
         names.export_excel(self.book,self.catalog)
         self.assertEqual(names.import_excel(self.book,self.catalog['rows'])['rows'],self.catalog['rows'])
+    def test_locked_linked_alternatives_cannot_be_split_in_excel(self):
+        names.export_excel(self.book,self.catalog)
+        book=load_workbook(self.book);sheet=book['Names'];sheet['C2']='FIRST';sheet['C3']='SECOND';book.save(self.book);book.close()
+        with self.assertRaisesRegex(PackingError,'locked'):names.import_excel(self.book,self.catalog['rows'])
+        self.assertEqual(names.load_catalog(self.path),self.catalog)
     def test_locked_rows_not_offered_for_merges(self):
         rows=copy.deepcopy(self.catalog['rows']);row=copy.deepcopy(rows[0]);row['id']='other';row['original_product']='OTHER';row['aliases']=[];row['locked']=False;rows.append(row)
         self.assertFalse(names.prepare_save(rows)['merges'])

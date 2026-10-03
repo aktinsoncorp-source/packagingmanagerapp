@@ -382,11 +382,14 @@ Desktop Microsoft Excel is required for these two small buttons.
    disabled and Import enabled. The program's grid pauses editing.
 3. Excel includes ONE ROW PER ORIGINAL PAIR, including every linked original in
    a merged definition, so all original names and variations can be edited.
-   These rows remain one merged definition when imported. Keep the Names sheet,
+   Linked originals normally stay one definition. Keep the Names sheet,
    four visible headings and hidden identification columns intact.
 4. You may edit the four name columns or add new rows. Changing an alternative
    in one linked row updates that alternative for the entire merged definition.
-   Conflicting new values on linked rows are rejected; use one shared value.
+   If linked rows have different new alternatives, their complete Excel values
+   import as separate definitions. Original pairs with equal alternatives stay
+   linked, and omitted pairs keep their previous alternatives. Matching new
+   definitions merge only after confirmation in the app.
    Omitted Excel rows remain in memory; delete definitions through the program.
 5. KEEP THE EXCEL WORKBOOK OPEN. Finish editing the cell, then click Import.
    The program saves Excel, normalizes/validates all names, asks about any new
@@ -397,7 +400,7 @@ Desktop Microsoft Excel is required for these two small buttons.
    Please do not exit excel file before clicking import
    The buttons reset. Export again to start from the saved names.
 
-Invalid names, duplicate original pairs, conflicting linked edits, changed
+Invalid names, duplicate original pairs, changed
 headings or formulas stop the import without changing saved names. Keep Excel
 open, correct the reported rows, and Import again. Use plain text. Multiline
 Excel cells are rejected. Other open Excel workbooks remain open.

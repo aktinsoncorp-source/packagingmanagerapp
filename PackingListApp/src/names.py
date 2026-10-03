@@ -284,9 +284,9 @@ def export_excel(path, catalog):
     ws.column_dimensions['E'].hidden = ws.column_dimensions['F'].hidden = True
     ws.freeze_panes = 'A2'
     ws.auto_filter.ref = f'A1:D{max(1, ws.max_row)}'
-    ws['A1'].comment = Comment('Each linked original pair has its own Excel row so all originals can be edited. They remain one merged definition in the program. Hidden IDs preserve links when originals change. Missing rows are retained; delete definitions in Define Name. Names become UPPERCASE, trailing spaces are removed, and paragraphs/line breaks are rejected.', 'Packing List Manager')
+    ws['A1'].comment = Comment('Each linked original pair has its own Excel row so all originals can be edited. Linked originals normally stay one definition; different new alternatives separate them on import. Hidden IDs preserve originals when names change. Missing rows are retained; delete definitions in Define Name. Names become UPPERCASE, trailing spaces are removed, and paragraphs/line breaks are rejected.', 'Packing List Manager')
     for cell in ('C1', 'D1'):
-        ws[cell].comment = Comment('Blank uses the original field. Start with a letter or number. Changing an alternative on one linked row updates the whole merged definition; conflicting edits are rejected. New matching definitions require confirmation to merge. Keep this workbook OPEN and click Import in Define Name.', 'Packing List Manager')
+        ws[cell].comment = Comment('Blank uses the original field. Start with a letter or number. One changed alternative updates the linked definition. Different new alternatives separate the original pairs on import, preserving each Excel row. Matching definitions are merged only after confirmation in the app. Keep this workbook OPEN and click Import in Define Name.', 'Packing List Manager')
     temp = path.with_name(path.stem + '.tmp-' + uuid.uuid4().hex + '.xlsx')
     try:
         wb.save(temp)
@@ -309,7 +309,7 @@ def import_excel(path, current_rows):
     rows = validate_rows(copy.deepcopy(current_rows))
     by_id = {r['id']: i for i, r in enumerate(rows)}
     by_key = {item_key(s['original_product'], s['original_variation']): i for i, r in enumerate(rows) for s in source_pairs(r)}
-    replacements, alt_edits, additions, targets = {}, {}, [], set()
+    replacements, alt_edits, alternatives, additions, targets = {}, {}, {}, [], set()
     priority = []
     updated = set()
     try:
@@ -343,7 +343,6 @@ def import_excel(path, current_rows):
                     priority.append(row['id'])
                     continue
                 existing = rows[target]
-                priority.append(existing['id'])
                 old_keys = {item_key(s['original_product'], s['original_variation']) for s in source_pairs(existing)}
                 if has_pairs and cells[5].value and identifier in by_id:
                     old = json.loads(cells[5].value)
@@ -355,17 +354,17 @@ def import_excel(path, current_rows):
                 if old_key not in old_keys or (target, old_key) in targets:
                     raise PackingError(f'Excel row {number}: two rows update the same original, or its hidden ID is invalid.')
                 targets.add((target, old_key))
+                priority.append((target, old_key))
                 if existing.get('locked'):
                     original = next(s for s in source_pairs(existing) if item_key(s['original_product'], s['original_variation']) == old_key)
                     if key != item_key(original['original_product'], original['original_variation']) or any(row[f] != existing[f] for f in FIELDS[2:]):
                         raise PackingError(f'Excel row {number}: this definition is locked. Unlock it in Define Name before editing.')
                 replacements[(target, old_key)] = {f: row[f] for f in FIELDS[:2]}
+                alternatives[(target, old_key)] = tuple(row[f] for f in FIELDS[2:])
                 for field in FIELDS[2:]:
                     if row[field] != existing[field]:
                         changes = alt_edits.setdefault((target, field), set())
                         changes.add(row[field])
-                        if len(changes) > 1:
-                            raise PackingError(f'Excel row {number}: conflicting alternatives for linked originals. Use one alternative value for the merged definition.')
                 updated.add(target)
         finally:
             wb.close()
@@ -373,11 +372,27 @@ def import_excel(path, current_rows):
         raise
     except Exception as exc:
         raise PackingError(f'Could not read the names workbook: {exc}') from exc
+    imported, routed, separated = [], {}, 0
     for target, row in enumerate(rows):
-        sources = [replacements.get((target, item_key(s['original_product'], s['original_variation'])), s) for s in source_pairs(row)]
-        row.update(sources[0])
-        row['aliases'] = sources[1:]
-        for field in FIELDS[2:]:
-            if (target, field) in alt_edits:
-                row[field] = next(iter(alt_edits[(target, field)]))
-    return {'ok': True, 'rows': validate_rows(rows + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated)}
+        # A single changed value still updates a shared definition. If linked
+        # originals receive distinct new values, keep their complete Excel
+        # pairs together instead of combining fields or rejecting the import.
+        split = any(len(alt_edits.get((target, field), ())) > 1 for field in FIELDS[2:])
+        shared = tuple(next(iter(alt_edits[(target, field)])) if not split and (target, field) in alt_edits else row[field] for field in FIELDS[2:])
+        groups = {}
+        for source in source_pairs(row):
+            old_key = item_key(source['original_product'], source['original_variation'])
+            values = alternatives.get((target, old_key), tuple(row[f] for f in FIELDS[2:])) if split else shared
+            groups.setdefault(values, []).append((old_key, replacements.get((target, old_key), source)))
+        for index, (values, originals) in enumerate(groups.items()):
+            definition = dict(row, **originals[0][1])
+            definition['aliases'] = [s for _, s in originals[1:]]
+            definition.update(zip(FIELDS[2:], values))
+            if index:
+                definition['id'] = uuid.uuid4().hex
+                separated += 1
+            imported.append(definition)
+            for old_key, _ in originals:
+                routed[(target, old_key)] = definition['id']
+    priority = [routed[p] if isinstance(p, tuple) else p for p in priority]
+    return {'ok': True, 'rows': validate_rows(imported + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated), 'separated': separated}

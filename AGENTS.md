@@ -42,3 +42,5 @@
 - Define Name Excel export must include all rows even when individual rows are locked. Preserve cell protection and import validation; do not unlock finished definitions to export. Skip formatting operations that Excel disallows on protected worksheets.
 
 - When Define Name opens, individual rows default locked only when both alternative product name and alternative variation are nonblank; blank or partial pairs start unlocked. Explicit row unlocking remains effective for that session, including saves/exports. Reopening reapplies these completion-based defaults.
+
+- Different new alternatives on unlocked linked Excel originals must import without a conflict warning: separate their complete alternative pairs into definitions while preserving every original, omitted pair, and the base ID. A single changed shared alternative still propagates. New matching definitions merge only after confirmation in the app; locked originals remain protected.

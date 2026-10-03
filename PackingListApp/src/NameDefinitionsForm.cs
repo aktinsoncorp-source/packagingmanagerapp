@@ -239,7 +239,8 @@ namespace PackingListManager {
                 var preview=await call(new Dictionary<string,object>{{"action","names_import"},{"path",excel.FilePath},{"rows",CollectRows()}});
                 var saved=await SavePrepared(Rows(preview["rows"]),preview.ContainsKey("priority")?preview["priority"]:new string[0]);
                 revision=Convert.ToInt32(saved["revision"]);Fill(Rows(saved["rows"]));dirty=false;
-                ResetExcel();message.Text="Excel names imported and saved: "+preview["added"]+" added, "+preview["updated"]+" updated. Temporary workbook closed and removed.";
+                ResetExcel();message.Text="Excel names imported and saved: "+preview["added"]+" added, "+preview["updated"]+" updated.";
+                if(preview.ContainsKey("separated")&&Convert.ToInt32(preview["separated"])>0)message.Text+=" Different linked alternatives separated into "+preview["separated"]+" additional definitions.";
             });
         }
         void ApplyRowLock(DataGridViewRow row) {

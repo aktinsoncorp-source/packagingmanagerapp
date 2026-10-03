@@ -320,3 +320,14 @@ session choices, so explicit unlocks work through save and Excel export. Opening
 the dialog does not mutate catalog objects or write private data by itself.
 DefaultLocksSmoke.cs checks complete, partial and whitespace pairs;
 LockedExportSmoke.cs verifies default locking and 17 real Excel round-trip checks.
+
+## Linked Excel alternatives (1.11.1)
+
+Excel imports separate unlocked linked originals when a shared alternative field
+receives multiple distinct new values. Each resulting definition keeps its complete
+Excel alternative pair; omitted originals keep the previous pair. Equal pairs stay
+linked, the original base keeps its ID, and every original survives. A single changed
+shared value still propagates. Matching new definitions use the existing app merge
+confirmation and Excel row priority. Locked originals cannot be separated by editing
+the workbook. Import remains a preview until the app saves the prepared definitions.
+134 regressions and 28 actual Excel/form checks passed, including both merge choices.

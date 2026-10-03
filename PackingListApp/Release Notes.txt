@@ -1,4 +1,3 @@
 Version 1.11.1
 
-- Define Name opens complete alternative name/variation pairs locked; incomplete pairs start unlocked.
-- Individually locked rows export to Excel and remain protected from edits.
+- Conflicting linked Excel edits import as separate definitions; matching names merge with confirmation in the app.

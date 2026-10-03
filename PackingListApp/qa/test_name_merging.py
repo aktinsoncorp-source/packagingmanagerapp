@@ -126,11 +126,79 @@ class MergeTests(unittest.TestCase):
         self.edit_book(lambda ws:ws.delete_rows(3))
         self.assertEqual(names.import_excel(self.book,merged['rows'])['rows'],merged['rows'])
 
-    def test_excel_conflicting_alternative_edits_fail_atomically(self):
+    def test_excel_different_alternatives_split_without_saving_partial_edits(self):
         merged=self.merged();names.export_excel(self.book,merged)
         def edit(ws):ws['C2']='first name';ws['C3']='second name'
         self.edit_book(edit);before=self.path.read_bytes()
-        with self.assertRaisesRegex(PackingError,'conflicting alternatives'):names.import_excel(self.book,merged['rows'])
+        imported=names.import_excel(self.book,merged['rows'])
+        self.assertEqual(self.path.read_bytes(),before)
+        self.assertEqual(imported['separated'],1)
+        self.assertEqual(len(imported['rows']),2)
+        by_original={r['original_product']:r for r in imported['rows']}
+        self.assertEqual(by_original['ORIGINAL B']['id'],merged['rows'][0]['id'])
+        self.assertEqual(by_original['ORIGINAL B']['alternative_product'],'FIRST NAME')
+        self.assertEqual(by_original['ORIGINAL A']['alternative_product'],'SECOND NAME')
+        self.assertTrue(all(not r['aliases'] and not r['locked'] for r in imported['rows']))
+        self.assertEqual(imported['priority'],[by_original['ORIGINAL B']['id'],by_original['ORIGINAL A']['id']])
+        saved=names.save_catalog(self.path,imported['rows'],merged['revision'])
+        self.assertEqual(names.encounter(self.path,[self.batch]),saved)
+        printed=names.apply_names([self.batch],saved)
+        self.assertEqual([(i.product,i.variation,i.pieces) for i in printed[0].orders[0].items],[('SECOND NAME','1KG',2),('FIRST NAME','1KG',3)])
+
+    def test_excel_split_keeps_complete_pairs_omitted_originals_and_base_id(self):
+        merged=self.merged();row=merged['rows'][0]
+        row['aliases'].append({'original_product':'ORIGINAL C','original_variation':'1KG'})
+        row['aliases'].append({'original_product':'ORIGINAL D','original_variation':'1KG'})
+        merged=names.save_catalog(self.path,merged['rows'],merged['revision'])
+        names.export_excel(self.book,merged)
+        def edit(ws):
+            ws['C2']='first name';ws['D2']='100ml'
+            ws['A3']='renamed listing';ws['C3']='second name';ws['D3']=''
+            ws['C4']='first name';ws['D4']='100ml'
+            ws.delete_rows(5)
+        self.edit_book(edit)
+        imported=names.import_excel(self.book,merged['rows'])
+        self.assertEqual(imported['separated'],2)
+        by_product={r['original_product']:r for r in imported['rows']}
+        self.assertEqual(by_product['ORIGINAL B']['id'],row['id'])
+        self.assertEqual(by_product['ORIGINAL B']['aliases'],[{'original_product':'ORIGINAL C','original_variation':'1KG'}])
+        self.assertEqual((by_product['RENAMED LISTING']['alternative_product'],by_product['RENAMED LISTING']['alternative_variation']),('SECOND NAME',''))
+        self.assertEqual((by_product['ORIGINAL D']['alternative_product'],by_product['ORIGINAL D']['alternative_variation']),('STANDARD ITEM','1KG'))
+        names.export_excel(self.book,{'rows':imported['rows']})
+        self.assertEqual(names.import_excel(self.book,imported['rows'])['rows'],imported['rows'])
+
+    def test_excel_variation_conflicts_split_without_combining_name_edits(self):
+        merged=self.merged();names.export_excel(self.book,merged)
+        def edit(ws):
+            ws['C2']='changed name';ws['D2']='100ml';ws['D3']='1l'
+        self.edit_book(edit)
+        imported=names.import_excel(self.book,merged['rows'])
+        by_product={r['original_product']:r for r in imported['rows']}
+        self.assertEqual((by_product['ORIGINAL B']['alternative_product'],by_product['ORIGINAL B']['alternative_variation']),('CHANGED NAME','100ML'))
+        self.assertEqual((by_product['ORIGINAL A']['alternative_product'],by_product['ORIGINAL A']['alternative_variation']),('STANDARD ITEM','1L'))
+
+    def test_excel_split_matches_merge_only_after_app_confirmation(self):
+        merged=self.merged();names.export_excel(self.book,merged)
+        def edit(ws):
+            ws['C2']='first name';ws['C3']='second name'
+            ws.append(['Original C','100ml','second name','1kg'])
+        self.edit_book(edit)
+        imported=names.import_excel(self.book,merged['rows'])
+        preview=names.prepare_save(imported['rows'],imported['priority'])
+        self.assertEqual(len(preview['merges']),1)
+        self.assertEqual(preview['merges'][0]['base_product'],'ORIGINAL A')
+        separate=names.save_catalog(self.path,preview['rows'],merged['revision'])
+        self.assertEqual(len(separate['rows']),3)
+        joined=names.save_catalog(self.path,preview['rows'],separate['revision'],[preview['merges'][0]['ids']])
+        self.assertEqual(len(joined['rows']),2)
+        self.assertEqual(sum(len(names.source_pairs(r)) for r in joined['rows']),3)
+
+    def test_excel_split_validation_error_preserves_saved_catalog(self):
+        merged=self.merged();names.export_excel(self.book,merged)
+        def edit(ws):
+            ws['C2']='first name';ws['C3']='second name';ws['A3']=ws['A2'].value;ws['B3']=ws['B2'].value
+        self.edit_book(edit);before=self.path.read_bytes()
+        with self.assertRaisesRegex(PackingError,'already belong'):names.import_excel(self.book,merged['rows'])
         self.assertEqual(self.path.read_bytes(),before)
 
     def test_excel_new_matching_definition_prompts_with_workbook_base_order(self):

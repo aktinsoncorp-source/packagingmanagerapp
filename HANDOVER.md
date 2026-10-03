@@ -391,3 +391,15 @@ Version remains 1.11.1. Reproduced the protected worksheet Rows.AutoFit COM fail
 ## Completion-based opening locks and installed AutoFit fix - October 4, 2026
 
 Version remains 1.11.1. Complete alternative product/variation pairs start locked whenever Define Name opens; missing either field starts unlocked. Explicit unlocks remain effective through saves/exports in that session. Constructor works on copies and does not alter the catalog on opening. Protected Excel AutoFit fix is now installed. 17 live Excel workflow checks, complete/partial/blank default cases, and sorting/highlight/locking checks passed. Evidence: qa/default-lock-export-check/result.json, qa/default-lock-cases/result.txt, qa/lock-default-controls-final/result.txt, qa/lock-defaults-installation.json. Four installed UI/help files match the candidate; engine and private catalog/settings unchanged. Previous release preserved in qa/previous-release-1.11.1-before-lock-defaults. Executable replacement preserved the running session; reopening loads the update.
+
+## Linked Excel import fix - October 4, 2026
+
+Version remains 1.11.1. Different new alternative values on unlocked linked originals
+now separate into definitions during import, keeping complete name/variation pairs,
+all originals, omitted pairs and the existing base ID. One changed shared value still
+propagates. Matching definitions merge only after the existing app confirmation.
+Locked originals stay protected, and validation errors do not write partial changes.
+134 regressions and 28 actual Excel/form checks passed; both merge choices verified.
+Evidence: qa/linked-import-20261004-*/result.json and qa/linked-import-installation.json.
+Final package: qa/LinkedImportRelease. Previous installation saved in
+qa/previous-release-1.11.1-before-linked-import-*. Local bundle ends in -LinkedImport.bundle.
