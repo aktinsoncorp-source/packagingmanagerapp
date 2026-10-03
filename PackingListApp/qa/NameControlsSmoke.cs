@@ -24,9 +24,9 @@ namespace PackingListManager {
      var grid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
      Check(grid.ReadOnly,"Starts globally locked");Check(form.SetEditLocked(false),"Unlock global");Check(form.SetAllRowLocks(false)&&await form.SaveNames(),"Explicit unlock retained during session");
      Check(NameDefinitionsForm.CompareVariation("30mL","100mL")<0,"30mL before100mL");Check(NameDefinitionsForm.CompareVariation("100mL","1L")<0,"100mL before1L");Check(NameDefinitionsForm.CompareVariation("100g","1kg")<0,"100g before1kg");Check(NameDefinitionsForm.CompareVariation("0.5L","100ML")>0,"Decimal units");
-     grid.Sort(grid.Columns["alternative_variation"],ListSortDirection.Ascending);
+     form.SortNames("alternative_variation");
      Check(Convert.ToString(grid.Rows[0].Cells["alternative_variation"].Value).ToUpperInvariant()=="100G","Ascending size groups");
-     grid.Sort(grid.Columns["alternative_variation"],ListSortDirection.Descending);
+     form.SortNames("alternative_variation");
      Check(Convert.ToString(grid.Rows[0].Cells["alternative_variation"].Value)=="1L","Descending size");
      var row=grid.Rows[0];Check(form.SetRowLocked(row,true),"Lock row");Check(row.Cells["original_product"].ReadOnly&&row.Cells["alternative_variation"].ReadOnly,"Whole row protected");
      Check(form.SetRowLocked(row,false),"Unlock row");row.Cells["alternative_product"].Value="CHANGED INVENTORY NAME";

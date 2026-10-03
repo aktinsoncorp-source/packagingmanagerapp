@@ -455,8 +455,14 @@ orders processed. Each export is a full-date snapshot: for ERP imports replace
 that date's previous snapshot rather than adding repeated exports together.
 
 Define Name sorting and row protection (version 1.11.1)
-Click a product-name heading to sort A-Z; click again for Z-A. Click a variation
-heading to sort sizes ascending or descending. mL/L and g/kg are converted to
+Choose Original product name OR Alternative product name for the first sort,
+then Original variation OR Alternative variation for sizes within each product.
+These two choices and directions are independent. Clicking the same product
+heading reverses A-Z/Z-A; clicking the same variation heading reverses smallest
+to largest/largest to smallest. Choosing another field starts it ascending and
+keeps the other sort unchanged. Black arrows and header labels show the direction;
+hover over a heading to see its next action. Underlined headings are active.
+mL/L and g/kg are converted to
 comparable sizes within their own unit family. Other variants sort as text.
 Row numbers follow the displayed order. Yellow marks unsaved row changes; saving
 clears the highlight. Leading spaces/symbols in alternative names are removed
@@ -475,6 +481,13 @@ the same known source price. Otherwise it stays blank and price_status explains
 whether prices are missing, partial or different. Order Items contains the exact
 price for each source line. Shopee source layouts include Unit Price; the current
 Lazada/TikTok packing layouts do not. Missing prices and currencies are not guessed.
+
+Source prices on SPX and FLASH packing lists
+Each product row includes Unit Price and Total Price from the source PDF. If a
+source total is absent but a unit price is present, Total Price is unit price
+times pieces, calculated exactly. Missing prices show a dash. A4 order grouping,
+handwritten staff fields, borders and quantity-only picking summaries stay the
+same. Lazada/TikTok packing tables retain their existing columns.
 
 Locked-row Excel export
 You can export all definitions even when individual rows are locked. Locked

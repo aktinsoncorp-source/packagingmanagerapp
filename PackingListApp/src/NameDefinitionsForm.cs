@@ -16,6 +16,10 @@ namespace PackingListManager {
         readonly Label count = new Label();
         readonly FlowLayoutPanel buttons = new FlowLayoutPanel();
         readonly string[] fields = {"original_product","original_variation","alternative_product","alternative_variation"};
+        readonly string[] fieldTitles = {"Original product name","Original variation","Alternative product name","Alternative variation"};
+        readonly Font sortFont = new Font("Segoe UI",8.5F);
+        string productSortField="original_product",variationSortField="original_variation";
+        bool productDescending,variationDescending;
         int revision;
         bool dirty, loading, working;
         bool editLocked=true;
@@ -35,9 +39,9 @@ namespace PackingListManager {
             call=send;Text="Define Name";Font=new Font("Segoe UI",10F);Size=new Size(1320,760);MinimumSize=new Size(1000,560);
             StartPosition=FormStartPosition.CenterParent;BackColor=Color.FromArgb(246,248,251);
             var layout=new TableLayoutPanel {Dock=DockStyle.Fill,Padding=new Padding(20),ColumnCount=1,RowCount=5};
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute,62));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute,78));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,42));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent,100));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,48));layout.RowStyles.Add(new RowStyle(SizeType.Absolute,46));
-            var note=new Label {Dock=DockStyle.Fill,Text="Click a name heading for A-Z / Z-A; click a variation heading for smallest / largest size. Yellow rows have unsaved changes.\nUnlock editing above, then use row padlocks or the two header padlocks for all rows. Blank alternatives keep the original field."};
+            var note=new Label {Dock=DockStyle.Fill,Text="Choose either product heading for A-Z / Z-A, then either variation heading for sizes within each product group.\nName and variation choices are independent. Black arrows show direction; hover over a heading for its next action.\nYellow marks unsaved changes. Unlock editing to use row locks. Blank alternatives keep their original values."};
             layout.Controls.Add(note,0,0);
             var find=new FlowLayoutPanel {Dock=DockStyle.Fill,WrapContents=false};
             find.Controls.Add(new Label {Text="Search",AutoSize=true,Margin=new Padding(0,6,10,0)});
@@ -52,12 +56,12 @@ namespace PackingListManager {
             grid.AutoSizeColumnsMode=DataGridViewAutoSizeColumnsMode.Fill;grid.AutoSizeRowsMode=DataGridViewAutoSizeRowsMode.AllCells;
             grid.DefaultCellStyle.WrapMode=DataGridViewTriState.True;grid.DefaultCellStyle.Padding=new Padding(5);grid.DefaultCellStyle.SelectionForeColor=Color.Black;
             grid.DefaultCellStyle.SelectionBackColor=Color.FromArgb(220,234,252);grid.RowTemplate.MinimumHeight=48;
-            grid.EnableHeadersVisualStyles=false;grid.ColumnHeadersHeight=40;grid.ColumnHeadersDefaultCellStyle.BackColor=Color.FromArgb(232,238,247);
+            grid.EnableHeadersVisualStyles=false;grid.ColumnHeadersHeightSizeMode=DataGridViewColumnHeadersHeightSizeMode.DisableResizing;grid.ColumnHeadersHeight=62;grid.ColumnHeadersDefaultCellStyle.BackColor=Color.FromArgb(232,238,247);
+            grid.ColumnHeadersDefaultCellStyle.ForeColor=Color.Black;grid.ColumnHeadersDefaultCellStyle.SelectionForeColor=Color.Black;
             grid.ColumnHeadersDefaultCellStyle.Font=new Font(Font,FontStyle.Bold);
-            var titles=new[]{"Original product name","Original variation","Alternative product name","Alternative variation"};
             var weights=new[]{31F,16F,26F,16F};
             for(int i=0;i<4;i++) {
-                var column=new DataGridViewTextBoxColumn {Name=fields[i],HeaderText=titles[i],FillWeight=weights[i],SortMode=DataGridViewColumnSortMode.Automatic};
+                var column=new DataGridViewTextBoxColumn {Name=fields[i],HeaderText=fieldTitles[i],FillWeight=weights[i],MinimumWidth=i%2==0?225:180,SortMode=DataGridViewColumnSortMode.Programmatic};
                 if(i>=2){column.DefaultCellStyle.BackColor=Color.FromArgb(255,242,216);column.HeaderCell.Style.BackColor=Color.FromArgb(248,203,173);column.DefaultCellStyle.Font=new Font(Font,FontStyle.Bold);}
                 grid.Columns.Add(column);
             }
@@ -65,15 +69,10 @@ namespace PackingListManager {
             var rowLockColumn=new DataGridViewImageColumn {Name="rowLock",HeaderText="",Width=72,AutoSizeMode=DataGridViewAutoSizeColumnMode.None,ReadOnly=true,ImageLayout=DataGridViewImageCellLayout.Normal,SortMode=DataGridViewColumnSortMode.NotSortable};
             rowLockColumn.DefaultCellStyle.NullValue=null;grid.Columns.Add(rowLockColumn);rowLockColumn.DisplayIndex=0;
             rowLockColumn.HeaderCell.ToolTipText="Lock all rows (left padlock) / unlock all rows (right padlock)";
-            grid.CellPainting+=(s,e)=>{if(e.RowIndex>=0&&grid.Rows[e.RowIndex].IsNewRow&&e.ColumnIndex==grid.Columns["rowLock"].Index){e.PaintBackground(e.ClipBounds,false);e.Handled=true;return;}if(e.RowIndex==-1&&e.ColumnIndex==grid.Columns["rowLock"].Index){e.PaintBackground(e.ClipBounds,false);e.Graphics.DrawImage(rowClosed,e.CellBounds.Left+8,e.CellBounds.Top+8);e.Graphics.DrawImage(rowOpen,e.CellBounds.Left+39,e.CellBounds.Top+8);e.Handled=true;}};
+            grid.CellPainting+=(s,e)=>{if(e.RowIndex==-1&&e.ColumnIndex>=0&&e.ColumnIndex<4){PaintSortHeader(e);return;}if(e.RowIndex>=0&&grid.Rows[e.RowIndex].IsNewRow&&e.ColumnIndex==grid.Columns["rowLock"].Index){e.PaintBackground(e.ClipBounds,false);e.Handled=true;return;}if(e.RowIndex==-1&&e.ColumnIndex==grid.Columns["rowLock"].Index){e.PaintBackground(e.ClipBounds,false);e.Graphics.DrawImage(rowClosed,e.CellBounds.Left+8,e.CellBounds.Top+8);e.Graphics.DrawImage(rowOpen,e.CellBounds.Left+39,e.CellBounds.Top+8);e.Handled=true;}};
+            grid.ColumnHeaderMouseClick+=(s,e)=>{if(e.ColumnIndex>=0&&e.ColumnIndex<4)SortNames(fields[e.ColumnIndex]);};
             grid.CellMouseClick+=(s,e)=>{if(e.ColumnIndex!=grid.Columns["rowLock"].Index)return;if(e.RowIndex==-1)SetAllRowLocks(e.X<36);else if(!grid.Rows[e.RowIndex].IsNewRow)SetRowLocked(grid.Rows[e.RowIndex],!lockedRows.Contains(grid.Rows[e.RowIndex]));};
             grid.CellBeginEdit+=(s,e)=>{if(editLocked||lockedRows.Contains(grid.Rows[e.RowIndex]))e.Cancel=true;};
-            grid.SortCompare+=(s,e)=>{
-                bool variant=e.Column.Name.EndsWith("variation");
-                e.SortResult=variant?CompareVariation(Convert.ToString(e.CellValue1),Convert.ToString(e.CellValue2)):StringComparer.OrdinalIgnoreCase.Compare(Convert.ToString(e.CellValue1),Convert.ToString(e.CellValue2));
-                if(e.SortResult==0&&!variant){string field=e.Column.Name.StartsWith("alternative")?"alternative_variation":"original_variation";e.SortResult=CompareVariation(Convert.ToString(grid.Rows[e.RowIndex1].Cells[field].Value),Convert.ToString(grid.Rows[e.RowIndex2].Cells[field].Value));}
-                e.Handled=true;
-            };
             grid.RowPostPaint+=(s,e)=>{if(!grid.Rows[e.RowIndex].IsNewRow)TextRenderer.DrawText(e.Graphics,(e.RowIndex+1).ToString(),grid.Font,new Rectangle(e.RowBounds.Left,e.RowBounds.Top,grid.RowHeadersWidth-5,e.RowBounds.Height),Color.DimGray,TextFormatFlags.Right|TextFormatFlags.VerticalCenter);};
             grid.CellContentClick+=(s,e)=>{if(e.RowIndex>=0&&e.ColumnIndex==4&&!grid.Rows[e.RowIndex].IsNewRow)ShowOriginals(grid.Rows[e.RowIndex]);};
             grid.EditingControlShowing+=(s,e)=>{var text=e.Control as TextBox;if(text!=null){text.CharacterCasing=CharacterCasing.Upper;text.Multiline=false;text.AcceptsReturn=false;}};
@@ -111,7 +110,7 @@ namespace PackingListManager {
             var close=Button("Close",95);close.Click+=(s,e)=>Close();layout.Controls.Add(buttons,0,3);
             message.Dock=DockStyle.Fill;message.Font=new Font("Segoe UI",9F);message.Text="Names are locked. Click the open-padlock icon to edit or use Excel.";layout.Controls.Add(message,0,4);Controls.Add(layout);
             revision=Convert.ToInt32(catalog["revision"]);Fill(Rows(catalog["rows"]),true);RefreshExcelState();
-            Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}lockButton.Image.Dispose();unlockButton.Image.Dispose();rowClosed.Dispose();rowOpen.Dispose();lockTips.Dispose();};
+            Disposed+=(s,e)=>{if(excel!=null){excel.Dispose();excel=null;}lockButton.Image.Dispose();unlockButton.Image.Dispose();rowClosed.Dispose();rowOpen.Dispose();lockTips.Dispose();sortFont.Dispose();};
             FormClosing+=async(s,e)=>{
                 if(working){e.Cancel=true;return;}
                 grid.EndEdit();
@@ -144,10 +143,71 @@ namespace PackingListManager {
                     grid.Rows[i].Tag=row;if(row.ContainsKey("locked")&&Convert.ToBoolean(row["locked"]))lockedRows.Add(grid.Rows[i]);
                     ApplyRowLock(grid.Rows[i]);savedRows[grid.Rows[i]]=RowSignature(grid.Rows[i]);
                 }
-                grid.ClearSelection();
+                ApplySorting();grid.ClearSelection();
             }
             finally {loading=false;}
             Filter();
+        }
+        internal bool SortNames(string field) {
+            if(working||excel!=null||!fields.Contains(field)||!grid.EndEdit())return false;
+            if(field.EndsWith("variation")) {
+                variationDescending=field==variationSortField?!variationDescending:false;variationSortField=field;
+            } else {
+                productDescending=field==productSortField?!productDescending:false;productSortField=field;
+            }
+            bool wasLoading=loading;loading=true;
+            try {ApplySorting();}finally{loading=wasLoading;}
+            return true;
+        }
+        void ApplySorting() {
+            grid.Sort(new DefinitionComparer(productSortField,productDescending,variationSortField,variationDescending));
+            foreach(string field in fields) {
+                int index=Array.IndexOf(fields,field);bool variation=field.EndsWith("variation");
+                bool active=field==(variation?variationSortField:productSortField);
+                bool descending=active&&(variation?variationDescending:productDescending);
+                grid.Columns[field].HeaderText=fieldTitles[index]+"\n"+SortCaption(field);
+                string current=variation?(descending?"largest to smallest":"smallest to largest"):(descending?"Z-A":"A-Z");
+                string next=variation?(descending?"smallest to largest":"largest to smallest"):(descending?"A-Z":"Z-A");
+                grid.Columns[field].HeaderCell.ToolTipText=active?"Sorted "+current+" by "+fieldTitles[index].ToLowerInvariant()+". Click for "+next+". The other sort stays unchanged.":"Click to sort "+current+" by "+fieldTitles[index].ToLowerInvariant()+". The other sort stays unchanged.";
+            }
+            grid.Invalidate();
+        }
+        string SortCaption(string field) {
+            bool variation=field.EndsWith("variation"),active=field==(field.EndsWith("variation")?variationSortField:productSortField);
+            bool descending=active&&(variation?variationDescending:productDescending);
+            if(variation)return active?(descending?"Largest to Smallest":"Smallest to Largest"):"Sort: Small to Large";
+            return active?(descending?"Z-A  |  click A-Z":"A-Z  |  click Z-A"):"Sort: A-Z";
+        }
+        void PaintSortHeader(DataGridViewCellPaintingEventArgs e) {
+            e.Paint(e.ClipBounds,DataGridViewPaintParts.Background|DataGridViewPaintParts.Border);
+            string field=fields[e.ColumnIndex];bool variation=field.EndsWith("variation"),active=field==(variation?variationSortField:productSortField);
+            bool descending=active&&(variation?variationDescending:productDescending);
+            var title=new Rectangle(e.CellBounds.Left+5,e.CellBounds.Top+5,e.CellBounds.Width-10,25);
+            var caption=new Rectangle(e.CellBounds.Left+5,e.CellBounds.Top+32,e.CellBounds.Width-30,22);
+            TextRenderer.DrawText(e.Graphics,fieldTitles[e.ColumnIndex],e.CellStyle.Font,title,Color.Black,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(e.Graphics,SortCaption(field),sortFont,caption,Color.Black,TextFormatFlags.Left|TextFormatFlags.VerticalCenter|TextFormatFlags.EndEllipsis);
+            int x=e.CellBounds.Right-14,y=e.CellBounds.Top+43;
+            using(var pen=new Pen(Color.Black,2F)) {
+                e.Graphics.DrawLine(pen,x,y-6,x,y+6);
+                int tip=y+(descending?-6:6),tail=tip+(descending?4:-4);
+                e.Graphics.DrawLine(pen,x,tip,x-4,tail);e.Graphics.DrawLine(pen,x,tip,x+4,tail);
+                if(active)e.Graphics.DrawLine(pen,caption.Left,caption.Bottom-1,caption.Left+Math.Min(caption.Width-5,TextRenderer.MeasureText(SortCaption(field),sortFont).Width-5),caption.Bottom-1);
+            }
+            e.Handled=true;
+        }
+        sealed class DefinitionComparer : System.Collections.IComparer {
+            readonly string product,variation;readonly int productDirection,variationDirection;
+            internal DefinitionComparer(string product,bool productDescending,string variation,bool variationDescending){this.product=product;this.variation=variation;productDirection=productDescending?-1:1;variationDirection=variationDescending?-1:1;}
+            public int Compare(object left,object right) {
+                var a=(DataGridViewRow)left;var b=(DataGridViewRow)right;
+                int result=StringComparer.OrdinalIgnoreCase.Compare(Convert.ToString(a.Cells[product].Value),Convert.ToString(b.Cells[product].Value));
+                if(result!=0)return Math.Sign(result)*productDirection;
+                result=CompareVariation(Convert.ToString(a.Cells[variation].Value),Convert.ToString(b.Cells[variation].Value));
+                if(result!=0)return Math.Sign(result)*variationDirection;
+                result=StringComparer.OrdinalIgnoreCase.Compare(Convert.ToString(a.Cells["original_product"].Value),Convert.ToString(b.Cells["original_product"].Value));
+                if(result!=0)return result;
+                return CompareVariation(Convert.ToString(a.Cells["original_variation"].Value),Convert.ToString(b.Cells["original_variation"].Value));
+            }
         }
         List<Dictionary<string,object>> CollectRows() {
             if(!grid.EndEdit())throw new Exception("Use one line only; paragraphs and line breaks are not allowed.");

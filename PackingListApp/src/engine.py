@@ -18,7 +18,7 @@ import uuid
 
 from docx import Document
 
-from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
+from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf, source_price
 from documents import build_document, verify_word
 
 VERSION = '1.11.1'
@@ -207,7 +207,10 @@ def read_completed_doc(path, group):
         platform = ('LAZADA' if m[1] == 'Number' else 'TIKTOK') if group == 'LAZADA_TIKTOK' else group
         if platform == 'LAZADA':
             platform = 'LAZADA'
-        items = [Item(clean(r.cells[1].text), clean(r.cells[2].text), int(r.cells[3].text)) for r in table.rows[2:]]
+        priced = [c.text for c in table.rows[1].cells[4:]] == ['Unit Price', 'Total Price']
+        items = [Item(clean(r.cells[1].text), clean(r.cells[2].text), int(r.cells[3].text),
+                      source_price(r.cells[4].text, f'Order {m[2]}') if priced else None,
+                      source_price(r.cells[5].text, f'Order {m[2]}', 'total price') if priced else None) for r in table.rows[2:]]
         order = Order(platform, m[2], items)
         records[order.key] = {'fingerprint': order.fingerprint(), 'order': asdict(order),
                               'output': path.name, 'source': 'Earlier completed document'}

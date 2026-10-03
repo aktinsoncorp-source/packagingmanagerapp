@@ -424,3 +424,27 @@ Local checkpoint bundle ends in -ExcelIdentity.bundle; earlier checkpoints retai
 Installed and hash-verified 299 engine/help files; the running UI executable, saved
 catalog, catalog backup and settings stayed unchanged. 36 actual Excel/form checks
 passed. The user can retry Import in the current Excel session without restarting.
+
+## Independent Define Name sorting and SPX/FLASH prices - October 4, 2026
+
+Version remains 1.11.1. Choose either original/alternative product for primary
+groups and either variation field for numeric sizes within those groups. Each
+family direction is independent; black arrows, captions and tooltips explain
+the toggle. Sorting retains row locks, dirty colors and merge priority.
+SPX/FLASH PDFs now show Unit Price and Total Price per product. Printed source
+totals take precedence; absent totals use exact unit price times pieces. Missing
+prices show a dash. A4/table widths and whole-order checks are retained; blue
+Lazada/TikTok tables and quantity-only summaries stay unchanged. Both source
+price fields enter immutable history, while existing fingerprints stay stable.
+152 regression cases verified, with one old shading expectation updated/rerun.
+23 sort UI checks, existing controls/default locks and 36 native Excel checks passed.
+Evidence: qa/independent-sort-saved-state/result.txt, qa/sort-prices-excel-*/result.json,
+qa/sort-prices-verification.json. Packaged PDF generation verified 17 orders,
+12 priced source lines and a Word-validated 75-order multipage picking summary.
+Six sample pages and the black-arrow UI were visually inspected. Final candidate:
+qa/SortPricesRelease. Installation evidence: qa/sort-prices-installation.json.
+Local bundle ends in -SortPrices.bundle; previous installations/checkpoints retained.
+Installed and hash-verified all 301 package files. ProductNames.json, its backup
+and Settings.json retained their hashes. Previous release saved under
+qa/previous-release-1.11.1-before-sort-prices-20261004-030317. Existing production
+packing PDFs were not regenerated. Reopening the app loads the sorting controls.

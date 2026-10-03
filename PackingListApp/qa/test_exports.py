@@ -192,5 +192,6 @@ class SkipRepeatTests(unittest.TestCase):
         doc=Document(self.make('docx')['path'])
         def fill(row):return [c._tc.get_or_add_tcPr().find(qn('w:shd')).get(qn('w:fill')) for c in row.cells]
         for table,first in [(doc.tables[0],2),(doc.tables[-1],1)]:
-            self.assertEqual([fill(table.rows[first+i]) for i in range(3)],[['FFFFFF']*4,['F2F2F2']*4,['FFFFFF']*4])
+            columns=len(table.columns)
+            self.assertEqual([fill(table.rows[first+i]) for i in range(3)],[['FFFFFF']*columns,['F2F2F2']*columns,['FFFFFF']*columns])
             self.assertNotIn(fill(table.rows[first-1])[0],['FFFFFF','F2F2F2'])

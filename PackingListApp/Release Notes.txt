@@ -1,3 +1,4 @@
 Version 1.11.1
 
-- Pasted inventory lists import correctly when older hidden row IDs remain; saved originals and row locks are preserved.
+- Product and size sorting use independent original/alternative fields, with black arrows and clear direction labels.
+- SPX and FLASH packing lists include source unit prices and line totals.

@@ -345,3 +345,27 @@ include A:F to move hidden identities with the visible columns.
 144 regressions passed. The failed inventory workbook's 1,145 unique originals and
 all alternative pairs passed packaged import/prepare/save against an isolated catalog;
 314 stale row IDs repaired, 831 additions, two differing linked definitions separated.
+
+## Independent sorting and packing prices (1.11.1)
+
+Define Name maintains separate product/variation fields and directions. A custom
+row comparer groups by either product field, then orders sizes by either variation
+field, retaining stable original-pair ties. Header clicks change only their own
+family. Black painted arrows, direction captions and next-action tooltips replace
+native single-column sorting. Fill reapplies the selected sorting; row locks,
+dirty colors and merge-selection priority remain attached to their rows.
+
+Shopee extraction now captures printed Total as Item.total_price alongside the
+optional unit_price. Fingerprints still depend only on original names/quantities.
+SPX/FLASH order tables expand to six columns within the original A4 table width;
+source totals are retained, missing totals use exact Decimal unit price times
+pieces, missing prices use a dash. Blue order tables and four-column picking
+summaries stay unchanged. Verification checks all price cells; legacy four-column
+Word reads remain supported and new priced tables preserve both price fields.
+
+QA: 152 regression cases verified (the earlier four-column shading expectation
+was updated and its case rerun); 23 independent sorting checks, existing native
+controls/default locks checks and 36 actual Excel/form import checks passed.
+Packaged generation verified 17 orders and all 12 Shopee price lines against
+source PDFs. Real Word verified A4/whole orders and a 75-order multipage summary;
+all six sample packing/summary pages and the black-arrow UI were visually reviewed.

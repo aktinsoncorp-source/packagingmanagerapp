@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 import json
 import os
@@ -12,7 +13,8 @@ from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.table import Table
-from docx.shared import Pt
+from docx.shared import Pt, Twips
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.text.paragraph import Paragraph
 
 from extractors import Batch, PackingError
@@ -20,6 +22,41 @@ from picking import picking_rows
 
 
 ASSETS = Path(__file__).resolve().parent / 'assets'
+
+
+def item_prices(item):
+    unit = format(Decimal(item.unit_price), '.2f') if item.unit_price is not None else '—'
+    total = item.total_price
+    if total is None and item.unit_price is not None:
+        total = Decimal(item.unit_price) * item.pieces
+    return [unit, format(Decimal(total), '.2f') if total is not None else '—']
+
+
+def add_price_columns(table):
+    """Keep the A4 table width, shared order header, borders and row styles."""
+    total = sum(int(column.w) // 635 for column in table._tbl.tblGrid.gridCol_lst)
+    widths = [round(total * fraction) for fraction in (.07, .42, .23, .07, .105)]
+    widths.append(total - sum(widths))
+    for row in table.rows[1:]:
+        for _ in range(2):
+            row._tr.append(deepcopy(row._tr.tc_lst[-1]))
+    grid = table._tbl.tblGrid
+    for column in list(grid):
+        grid.remove(column)
+    for width in widths:
+        column = OxmlElement('w:gridCol')
+        column.set(qn('w:w'), str(width))
+        grid.append(column)
+    header = table.rows[0]._tr.tc_lst[0]
+    header.get_or_add_tcPr().find(qn('w:gridSpan')).set(qn('w:val'), '6')
+    table.cell(0, 0).width = Twips(total)
+    for row in table.rows[1:]:
+        for cell, width in zip(row.cells, widths):
+            cell.width = Twips(width)
+    for cell, title in zip(table.rows[1].cells[4:], ('Unit Price', 'Total Price')):
+        set_text(cell.paragraphs[0], title)
+    for cell in table.rows[2].cells[4:]:
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
 
 def set_text(paragraph, text):
@@ -55,6 +92,9 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
     body = d._element.body
     title, intro, heading, spacer = [deepcopy(p._p) for p in d.paragraphs]
     table_proto = deepcopy(d.tables[0]._tbl)
+    prices = group in ('SPX', 'FLASH')
+    if prices:
+        add_price_columns(Table(table_proto, d._body))
     for node in list(body):
         if node.tag != qn('w:sectPr'):
             body.remove(node)
@@ -102,7 +142,10 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
                 row = deepcopy(row_proto)
                 tbl.append(row)
                 cells = table.rows[-1].cells
-                for cell, text in zip(cells, ['[     ]', item.product, item.variation, str(item.pieces)]):
+                values = ['[     ]', item.product, item.variation, str(item.pieces)]
+                if prices:
+                    values += item_prices(item)
+                for cell, text in zip(cells, values):
                     set_text(cell.paragraphs[0], text)
                     fill = 'FFFFFF' if item_no % 2 == 0 else 'F2F2F2'
                     cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), fill)
@@ -155,7 +198,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
     if len(actual.tables) != sum(len(b.orders) for b in batches) + 1:
         raise PackingError('Document verification failed: order count mismatch.')
     for table, order in zip(actual.tables, (o for b in batches for o in b.orders)):
-        expected = [[i.product, i.variation, str(i.pieces)] for i in order.items]
+        expected = [[i.product, i.variation, str(i.pieces)] + (item_prices(i) if prices else []) for i in order.items]
         rows = [[c.text for c in row.cells[1:]] for row in table.rows[2:]]
         header = table.cell(0, 0).text
         expected_header = f"{'Order Number' if order.platform == 'LAZADA' else 'Order ID'}: {order.order_id}\tEmployee:__________________\tNumber __________\tTime __________"

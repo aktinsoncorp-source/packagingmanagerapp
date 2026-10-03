@@ -38,6 +38,7 @@ class Item:
     variation: str
     pieces: int
     unit_price: str | None = None
+    total_price: str | None = None
 
 
 @dataclass
@@ -96,14 +97,14 @@ def region(page, left, top, right, bottom):
     return clean(part.extract_text(x_tolerance=1.5, y_tolerance=2))
 
 
-def source_price(value, context):
+def source_price(value, context, label='unit price'):
     from decimal import Decimal
     value = clean(value)
     if not value or value in ('\u2014', '-', 'N/A'):
         return None
-    # Read the printed unit value only; no assumed currency or derived price.
+    # Read the printed value only; no assumed currency or guessed price.
     if not re.fullmatch(r'(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.[0-9]{1,2})?', value):
-        raise PackingError(f'{context}: the unit price could not be read safely ({value!r}).')
+        raise PackingError(f'{context}: the {label} could not be read safely ({value!r}).')
     return format(Decimal(value.replace(',', '')), '.2f')
 
 
@@ -175,7 +176,10 @@ def shopee_page(page, platform, page_num):
                 qty = positive_integer(region(p, xqty, y1, xunit, y2), f'Order {ids[0]}, item {index + 1}')
                 if not product:
                     raise PackingError(f'Order {ids[0]}: a product name is blank.')
-                items.append(Item(product, variation, qty, source_price(region(p, xunit, y1, xtotal, y2), f'Order {ids[0]}, item {index + 1}')))
+                context = f'Order {ids[0]}, item {index + 1}'
+                items.append(Item(product, variation, qty,
+                                  source_price(region(p, xunit, y1, xtotal, y2), context),
+                                  source_price(region(p, xtotal, y1, p.bbox[2], y2), context, 'total price')))
             orders.append(ShopeePart(Order(platform, ids[0], items), numbers[0], numbers[-1]))
     return orders
 
