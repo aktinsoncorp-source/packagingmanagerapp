@@ -20,7 +20,10 @@ namespace PackingListManager {
             if(type==null)throw new Exception("Microsoft Excel is required for editing names. Install desktop Excel and export again.");
             Application=Activator.CreateInstance(type);
             Workbook=Application.Workbooks.Open(FilePath);
-            Workbook.Worksheets["Names"].Rows.AutoFit();
+            // Protected exports already have wrapped rows sized by the engine.
+            // Excel blocks AutoFit on protected sheets; never unlock finished names.
+            if(!(bool)Workbook.Worksheets["Names"].ProtectContents)
+                Workbook.Worksheets["Names"].Rows.AutoFit();
             Workbook.Worksheets["Names"].Range["C2"].Select();
             Application.Visible=visible;
         }

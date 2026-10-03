@@ -467,3 +467,9 @@ the same known source price. Otherwise it stays blank and price_status explains
 whether prices are missing, partial or different. Order Items contains the exact
 price for each source line. Shopee source layouts include Unit Price; the current
 Lazada/TikTok packing layouts do not. Missing prices and currencies are not guessed.
+
+Locked-row Excel export
+You can export all definitions even when individual rows are locked. Locked
+rows remain protected in Excel; unlocked rows can be edited and imported.
+There is no need to unlock finished rows before exporting. Use the overall
+open-padlock control to enable the Excel editing session as usual.

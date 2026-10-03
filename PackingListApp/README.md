@@ -302,3 +302,12 @@ QA: 129 regressions; NameControlsSmoke.cs runs actual form sorting, locking, hig
 and save/reset checks. Packaged sales_smoke.py verifies source prices across platforms.
 A packaged Excel round trip confirmed locked cells reject edits and unlocked fields
 are auto-corrected. Existing packing PDF column layouts remain unchanged.
+
+## Protected Excel export fix (1.11.1)
+
+NameExcelSession.Open skips Rows.AutoFit when ProtectContents is true, using
+the engine-provided row heights. Protected Excel sheets reject AutoFit; this
+previously prevented opening exports containing individually locked rows.
+The overall editing gate and row/import protection remain unchanged.
+qa/LockedExportSmoke.cs reproduces the old AutoFit failure and verifies mixed,
+all-locked and unlocked export/import sessions using actual Excel.

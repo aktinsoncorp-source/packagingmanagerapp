@@ -383,3 +383,7 @@ Previous installed build will be retained in qa/previous-release-1.11.1-before-n
 Additional Git bundle: Git/v1.11.1/PackingListManager-1.11.1-NameControls.bundle.
 
 Final packaged packing generation also passed real Word A4/whole-order/summary validation (qa/names-packing-smoke.log). Installation verified 301 files; ProductNames.json, its backup and Settings.json retained their hashes. No production packing outputs were regenerated.
+
+## Locked-row Excel export fix - October 4, 2026
+
+Version remains 1.11.1. Reproduced the protected worksheet Rows.AutoFit COM failure through actual Define Name ExportToExcel. Open now skips AutoFit for protected workbooks, retaining row heights and protection. All 15 live Excel checks passed: mixed locks, all locked, unlocked, edit rejection and import. Evidence: qa/locked-export-before/result.json and qa/locked-export-after/result.json. Candidate: qa/candidate-1.11.1-locked-export. Installation is pending closure of the running app. The engine is unchanged. Checkpoint bundle ends in -LockedExport.bundle.

@@ -1,6 +1,3 @@
 Version 1.11.1
 
-- Sort Define Name products A-Z/Z-A and variations by size in either direction.
-- Numbered rows, individual locks, and lock-all/unlock-all controls protect definitions.
-- Unsaved name changes are highlighted; invalid leading characters are corrected automatically.
-- Excel sales reports include unit prices printed in source PDFs.
+- Export Define Name to Excel even when some or all rows are individually locked; finished rows remain protected from edits.
