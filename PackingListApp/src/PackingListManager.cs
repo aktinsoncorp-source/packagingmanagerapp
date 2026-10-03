@@ -12,8 +12,8 @@ using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-[assembly: System.Reflection.AssemblyVersion("1.11.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.11.0.0")]
+[assembly: System.Reflection.AssemblyVersion("1.11.1.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.11.1.0")]
 
 namespace PackingListManager {
     static class Program {
@@ -67,7 +67,7 @@ namespace PackingListManager {
         public MainForm(string[] args) {
             startupArgs = args;
             settingsPath = Path.Combine(appDir,"Settings.json");
-            Text = "Packing List Manager 1.11";
+            Text = "Packing List Manager 1.11.1";
             Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             Font = new Font("Segoe UI", 10F);
             BackColor = Color.FromArgb(246,248,251);
@@ -226,13 +226,12 @@ namespace PackingListManager {
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="platform",HeaderText="Platform",FillWeight=65,ReadOnly=true});
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="file",HeaderText="PDF file",FillWeight=220,ReadOnly=true});
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="orders",HeaderText="Orders",FillWeight=48,ReadOnly=true});
-            grid.Columns.Add(new DataGridViewTextBoxColumn {Name="pieces",HeaderText="Pieces",FillWeight=48,ReadOnly=true});
             grid.Columns.Add(new DataGridViewTextBoxColumn {Name="status",HeaderText="Status",FillWeight=180,ReadOnly=true});
             var courierColumn=new DataGridViewComboBoxColumn {Name="courier",HeaderText="Courier",FillWeight=76,MinimumWidth=88,FlatStyle=FlatStyle.Flat,DisplayStyle=DataGridViewComboBoxDisplayStyle.DropDownButton};
             courierColumn.Items.AddRange("Auto","SPX","FLASH");grid.Columns.Add(courierColumn);courierColumn.DisplayIndex=3;
             grid.Columns[0].AutoSizeMode=DataGridViewAutoSizeColumnMode.None;grid.Columns[0].Width=70;
             grid.Columns["platform"].Width=95;grid.Columns["courier"].Width=100;
-            grid.Columns["orders"].Width=65;grid.Columns["pieces"].Width=65;
+            grid.Columns["orders"].Width=65;
             grid.Columns["file"].AutoSizeMode=DataGridViewAutoSizeColumnMode.Fill;
             grid.Columns["status"].AutoSizeMode=DataGridViewAutoSizeColumnMode.Fill;
             grid.Columns["file"].FillWeight=55;grid.Columns["status"].FillWeight=45;
@@ -328,7 +327,7 @@ namespace PackingListManager {
             try {
                 selectingAll=true;
                 foreach(string state in new[]{"ERROR","REVIEW"}) {
-                    int i=grid.Rows.Add(false,"","QA excluded PDF",0,0,state,null);
+                    int i=grid.Rows.Add(false,"","QA excluded PDF",0,state,null);
                     var row=grid.Rows[i];added.Add(row);
                     row.Tag=new Dictionary<string,object>{{"status",state},{"requires_revision",state=="REVIEW"},{"path","QA "+state}};
                     row.Cells[0].ReadOnly=true;
@@ -410,20 +409,19 @@ namespace PackingListManager {
                 entries=Rows(result["entries"]);outputs=Rows(result["outputs"]);revisions.Clear();loadingFiles=true;grid.Rows.Clear();
                 foreach(var entry in entries) {
                     string state=S(entry,"status"),label=S(entry,"message");
-                    int i=grid.Rows.Add(state=="READY"||state=="MISSING",S(entry,"platform"),S(entry,"path"),N(entry,"orders"),N(entry,"pieces"),label,B(entry,"is_shopee")?S(entry,"courier"):null);
+                    int i=grid.Rows.Add(state=="READY"||state=="MISSING",S(entry,"platform"),S(entry,"path"),N(entry,"orders"),label,B(entry,"is_shopee")?S(entry,"courier"):null);
                     var row=grid.Rows[i];row.Tag=entry;row.Cells[0].ReadOnly=!CanSelectFile(entry);
                     if(B(entry,"is_shopee"))row.Cells["courier"].ToolTipText="Auto uses the nearest SPX/FLASH folder first, then the filename. Choose SPX or FLASH to override.";
                     else {row.Cells["courier"]=new DataGridViewTextBoxCell {Value="—",Style=new DataGridViewCellStyle {ForeColor=Color.Gray,BackColor=Color.FromArgb(242,244,247)}};row.Cells["courier"].ReadOnly=true;}
                     if(previous.ContainsKey(S(entry,"path"))&&CanSelectFile(entry))row.Cells[0].Value=previous[S(entry,"path")];
-                    row.Cells[5].ToolTipText=label;
-                    row.Cells[5].Style.ForeColor=state=="READY"||state=="MISSING"?Color.FromArgb(20,112,67):(state=="REVIEW"||state=="ERROR"||state=="COURIER"?Color.FromArgb(166,77,10):Color.FromArgb(95,106,119));
+                    row.Cells["status"].ToolTipText=label;
+                    row.Cells["status"].Style.ForeColor=state=="READY"||state=="MISSING"?Color.FromArgb(20,112,67):(state=="REVIEW"||state=="ERROR"||state=="COURIER"?Color.FromArgb(166,77,10):Color.FromArgb(95,106,119));
                 }
                 loadingFiles=false;
                 if(preserveSelections)foreach(DataGridViewRow row in grid.Rows)if(S((Dictionary<string,object>)row.Tag,"path")==selectedPath){grid.CurrentCell=row.Cells["file"];break;}
                 int fresh=entries.Sum(e=>N(e,"new_orders")),issues=entries.Count(e=>S(e,"status")=="REVIEW"||S(e,"status")=="ERROR"||S(e,"status")=="COURIER");
-                int missing=entries.Sum(e=>N(e,"missing_orders"));
-                summary.Text="Review files — "+fresh+" new orders"+(missing>0?"  |  "+missing+" orders missing output documents":"")+(issues>0?"  |  "+issues+" file(s) need attention":"");
-                status.Text=entries.Count==0?"No readable, supported packing PDFs for this date. Choose a dated folder or use Add PDFs.":"Tick Use for any PDF to generate again. New files and files missing output are selected automatically.";
+                summary.Text="Review files — "+fresh+" new orders"+(issues>0?"  |  "+issues+" file(s) need attention":"");
+                status.Text=entries.Count==0?"No readable, supported packing PDFs for this date. Choose a dated folder or use Add PDFs.":"Tick Use for any PDF to generate again. New orders are selected automatically.";
                 ShowSelected();RefreshSelection();
             } catch(Exception ex){loadingFiles=false;ShowError(ex);grid.Rows.Clear();entries.Clear();outputs.Clear();RefreshSelection();}
         }
@@ -463,8 +461,8 @@ namespace PackingListManager {
         }
         void UpdateSelectionTotals() {
             var counts=SelectionCounts();
-            selectionTotals.Text="Selected: "+counts.Values.Sum(c=>c[0])+" PDFs  |  "+counts.Values.Sum(c=>c[1])+" orders  |  "+counts.Values.Sum(c=>c[2])+" pieces";
-            if(counts.Count>0)selectionTotals.Text+="\n"+String.Join("     ",new[]{"SPX","FLASH","LAZADA","TIKTOK"}.Where(counts.ContainsKey).Select(p=>p+": "+counts[p][0]+" PDFs / "+counts[p][1]+" orders / "+counts[p][2]+" pieces"));
+            selectionTotals.Text="Selected: "+counts.Values.Sum(c=>c[0])+" PDFs  |  "+counts.Values.Sum(c=>c[1])+" orders";
+            if(counts.Count>0)selectionTotals.Text+="\n"+String.Join("     ",new[]{"SPX","FLASH","LAZADA","TIKTOK"}.Where(counts.ContainsKey).Select(p=>p+": "+counts[p][0]+" PDFs / "+counts[p][1]+" orders"));
             selectionTotals.Text+="\nMatching orders are counted once.";
         }
         internal bool CheckSelectionTotals() {
@@ -513,7 +511,7 @@ namespace PackingListManager {
                 buttons.Controls.Add(cancel);buttons.Controls.Add(revise);buttons.Controls.Add(keep);panel.Controls.Add(buttons,0,2);review.Controls.Add(panel);review.CancelButton=cancel;
                 var decision=review.ShowDialog(this);
                 if(decision==DialogResult.Yes) {
-                    revisions.Add(S(en,"path"));grid.CurrentRow.Cells[0].ReadOnly=false;grid.CurrentRow.Cells[0].Value=true;grid.CurrentRow.Cells[5].Value="Reviewed — revision selected";RefreshSelection();
+                    revisions.Add(S(en,"path"));grid.CurrentRow.Cells[0].ReadOnly=false;grid.CurrentRow.Cells[0].Value=true;grid.CurrentRow.Cells["status"].Value="Reviewed — revision selected";RefreshSelection();
                 } else if(decision==DialogResult.No) {
                     try {await Call(new Dictionary<string,object>{{"action","acknowledge"},{"selected",new Dictionary<string,object>{{"path",S(en,"path")},{"sha256",S(en,"sha256")}}}},"Saving the changed-file review...");await Scan();}catch(Exception ex){ShowError(ex);}
                 }

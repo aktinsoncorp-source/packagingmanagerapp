@@ -75,13 +75,16 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
         intro_text += '  REVISION: check the previous packing record before packing these orders.'
     set_text(p, intro_text)
     append(intro)
+    total_heading = deepcopy(heading)
+    total_paragraph = Paragraph(total_heading, d._body)
+    set_text(total_paragraph, f"Total orders: {sum(len(b.orders) for b in batches)}")
+    total_paragraph.paragraph_format.keep_with_next = True
+    append(total_heading)
     for batch_no, batch in enumerate(batches, 1):
         h = deepcopy(heading)
         p = Paragraph(h, d._body)
         label = batch.platform if group == 'LAZADA_TIKTOK' else f'Batch {batch_no}'
-        count = len(batch.orders)
-        text = f'{label}   {count} order' + ('' if count == 1 else 's')
-        p.runs[0].text = text
+        p.runs[0].text = label
         if len(p.runs) > 1:
             p.runs[1].text = '   ' + Path(batch.path).name
         else:

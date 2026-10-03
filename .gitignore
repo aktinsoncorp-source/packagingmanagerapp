@@ -46,3 +46,5 @@ Desktop.ini
 # The four sanitized DOCX templates in src/assets ARE tracked.
 # Dated source folders and all completed packing documents are excluded
 # by the root allowlist above. Back up those business files separately.
+
+!/PackingListApp/Release Notes.txt

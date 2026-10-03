@@ -1,12 +1,12 @@
-# Packing List Manager 1.11.0 handover
+# Packing List Manager 1.11.1 handover
 
 ## Current location and release
 
 Workspace: C:\Users\Admin\Desktop\Packing List Manager Program
 Installed application: Packing List Manager\Packing List Manager.exe
 Live source folders are separate: C:\Users\Admin\Desktop\ONLINE SHOPS
-The executable and engine are version 1.11.0. The preceding installed 1.10.0 release,
-including its private catalog, is preserved in PackingListApp/qa/previous-release-1.10.0.
+The executable and engine are version 1.11.1. The preceding installed 1.11.0 release, including its private catalog, is
+preserved in PackingListApp/qa/previous-release-1.11.0. The 1.10.0 backup remains.
 The 1.9.0 backup remains in PackingListApp/qa/previous-release-1.9.0.
 The 1.8.0 backup remains in PackingListApp/qa/previous-release-1.8.0.
 The 1.7.0 backup remains in PackingListApp/qa/previous-release-1.7.0.
@@ -338,3 +338,19 @@ Git stays local. Keep version bundles in Git/v1.4.0, Git/v1.5.0, Git/v1.6.0, etc
 an earlier version checkpoint. Use git log for the current commit ID. Bundles hold
 source/history and sanitized assets, not installed executables or business data.
 Do not upload to GitHub until requested. Copy backups off this computer separately.
+
+## Version 1.11.1
+
+The main PDF list and selection totals show orders without pieces. Output documents
+show a total order count above batch/platform headings; per-batch counts are removed.
+Deleted outputs are removed from active history, with immutable output manifests
+archived for audit. Uncovered orders become new, with no historical repeat warning.
+Surviving copies still count; source overlap warnings and revision reviews for
+surviving outputs remain. Local bundle: Git/v1.11.1.
+
+Verification: 114 regressions passed; 17 regeneration checks reran after the
+final history guard. Final packaged smoke: qa/release-1.11.1-verification.json.
+17 orders / 30 pieces across all four platforms passed actual Word A4 and
+whole-order/summary pagination checks; six PDF pages and main UI were visually
+reviewed. 301 installed files match the tested candidate; ProductNames.json,
+its backup and Settings.json retain their hashes. No production PDFs regenerated.

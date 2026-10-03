@@ -38,7 +38,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(sum(o['pieces'] for o in entry['order_totals']),4)
         visible=self.scan()['outputs'][0];self.assertEqual(visible['sequence'],1)
         self.assertEqual(len(visible['included_sources'][0]['orders']),2)
-        Path(result['path']).unlink();self.assertEqual(self.scan()['entries'][0]['status'],'MISSING')
+        Path(result['path']).unlink();self.assertEqual(self.scan()['entries'][0]['status'],'READY')
         self.assertEqual(self.scan()['outputs'],[])
         self.assertTrue(self.make()['filename'].endswith('_1.pdf'))
     def test_mixed_formats_share_numbers_and_skip_lower_gaps(self):
@@ -100,7 +100,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
         word=self.make('docx');self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
         Path(pdf['path']).unlink();self.assertEqual(self.scan()['entries'][0]['message'],'Process again')
-        Path(word['path']).unlink();self.assertEqual(self.scan()['entries'][0]['status'],'MISSING')
+        Path(word['path']).unlink();self.assertEqual(self.scan()['entries'][0]['status'],'READY')
         self.assertEqual(self.scan()['entries'][0]['output_formats'],[])
     def test_old_word_record_without_format_field_is_recognized(self):
         self.source('a.pdf',['A']);word=self.make('docx');history=self.history()

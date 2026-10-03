@@ -52,6 +52,30 @@ class RegenerationTests(unittest.TestCase):
     def history(self):
         return json.loads((self.folder / '000 Output' / engine.HISTORY).read_text())
 
+    def test_deleted_output_clears_repeat_memory_and_persists_reset(self):
+        self.source('one.pdf', ['A'])
+        first = self.generate()[0]
+        original = self.history()['outputs'][first['filename']]
+        Path(first['path']).unlink()
+        entry = self.scan()['entries'][0]
+        self.assertEqual(entry['status'], 'READY')
+        self.assertEqual(entry['new_orders'], 1)
+        self.assertNotIn('missing', entry['details'].lower())
+        h = self.history()
+        self.assertEqual(h['orders'], {})
+        self.assertEqual(h['sources'], {})
+        self.assertEqual(h['outputs'], {})
+        self.assertEqual(h['archived_outputs'][-1]['order_snapshots'], original['order_snapshots'])
+        selected = [{'path': entry['path'], 'sha256': entry['sha256']}]
+        result = engine.generate(self.folder, selected, verifier=layout)
+        self.assertFalse(result.get('confirmation_required', False))
+        self.assertEqual(result['outputs'][0]['mode'], 'new')
+        paragraphs = [p.text for p in Document(result['outputs'][0]['path']).paragraphs]
+        self.assertIn('Total orders: 1', paragraphs)
+        heading = next(p for p in paragraphs if p.startswith('Batch 1'))
+        self.assertNotIn('order', heading)
+        self.assertLess(paragraphs.index('Total orders: 1'), paragraphs.index(heading))
+
     def test_processed_file_can_generate_again_without_overwrite(self):
         self.source('one.pdf', ['A', 'B'])
         first = self.generate()[0]
@@ -70,7 +94,7 @@ class RegenerationTests(unittest.TestCase):
         first = self.generate()[0]
         Path(first['path']).unlink()
         result = self.scan()
-        self.assertEqual([e['status'] for e in result['entries']], ['MISSING', 'MISSING'])
+        self.assertEqual([e['status'] for e in result['entries']], ['READY', 'READY'])
         self.assertEqual(result['outputs'], [])
         second = self.generate()[0]
         self.assertTrue(second['filename'].endswith('_1.docx'))
@@ -85,7 +109,7 @@ class RegenerationTests(unittest.TestCase):
         Path(second['path']).unlink()
         self.assertEqual(self.scan()['entries'][0]['status'], 'DONE')
         Path(first['path']).unlink()
-        self.assertEqual(self.scan()['entries'][0]['status'], 'MISSING')
+        self.assertEqual(self.scan()['entries'][0]['status'], 'READY')
         third = self.generate()[0]
         self.assertTrue(third['filename'].endswith('_1.docx'))
 
@@ -101,8 +125,8 @@ class RegenerationTests(unittest.TestCase):
         Path(second['path']).unlink()
         entries = {e['path']: e for e in self.scan()['entries']}
         self.assertEqual(entries['SPX/one.pdf']['status'], 'DONE')
-        self.assertEqual(entries['SPX/two.pdf']['status'], 'MISSING')
-        self.assertEqual(entries['SPX/two.pdf']['missing_orders'], 1)
+        self.assertEqual(entries['SPX/two.pdf']['status'], 'READY')
+        self.assertEqual(entries['SPX/two.pdf']['new_orders'], 1)
         third = self.generate(['two.pdf'])[0]
         self.assertEqual(set(engine.read_completed_doc(Path(third['path']), 'SPX')), {'SHOPEE:B', 'SHOPEE:C'})
 
@@ -115,15 +139,13 @@ class RegenerationTests(unittest.TestCase):
         second = self.generate(['two.pdf'])[0]
         self.assertEqual(len(engine.read_completed_doc(Path(second['path']), 'SPX')), 1)
 
-    def test_deleted_output_does_not_hide_changed_source_review(self):
+    def test_deleted_output_resets_changed_source_when_no_copy_survives(self):
         self.source('one.pdf', ['A'])
         first = self.generate()[0]
         Path(first['path']).unlink()
         self.source('one.pdf', ['A'], quantity=5)
-        self.assertEqual(self.scan()['entries'][0]['status'], 'REVIEW')
-        with self.assertRaises(PackingError):
-            self.generate()
-        second = self.generate(revision=True)[0]
+        self.assertEqual(self.scan()['entries'][0]['status'], 'READY')
+        second = self.generate()[0]
         self.assertEqual(int(Document(second['path']).tables[-1].rows[-1].cells[3].text), 5)
 
     def test_revision_invalidates_all_old_copies_for_missing_detection(self):
@@ -135,14 +157,14 @@ class RegenerationTests(unittest.TestCase):
         self.assertEqual(h['outputs'][first['filename']]['status'], 'superseded')
         self.assertEqual(h['outputs'][second['filename']]['status'], 'superseded')
         Path(third['path']).unlink()
-        self.assertEqual(self.scan()['entries'][0]['status'], 'MISSING')
+        self.assertEqual(self.scan()['entries'][0]['status'], 'READY')
 
     def test_missing_legacy_doc_can_be_regenerated_from_logged_sources(self):
         self.source('one.pdf', ['A'])
         out = self.folder / '000 Output'
         out.mkdir()
         (out / 'Processed_Files.txt').write_text('PACKING LIST PROCESSING LOG\n\nSPX_Packing_Checklist_2026-09-26_1.docx\nStatus: Completed\n  - SPX/one.pdf | 1 orders\n')
-        self.assertEqual(self.scan()['entries'][0]['status'], 'MISSING')
+        self.assertEqual(self.scan()['entries'][0]['status'], 'READY')
         second = self.generate()[0]
         self.assertTrue(second['filename'].endswith('_1.docx'))
 
@@ -155,8 +177,8 @@ class RegenerationTests(unittest.TestCase):
             value.pop('order_fingerprints')
         engine.atomic_json(self.folder / '000 Output' / engine.HISTORY, h)
         Path(first['path']).unlink()
-        self.assertEqual(self.scan()['entries'][0]['status'], 'MISSING')
-        self.assertTrue(self.history()['outputs'][first['filename']]['sources'])
+        self.assertEqual(self.scan()['entries'][0]['status'], 'READY')
+        self.assertTrue(self.history()['archived_outputs'][-1]['sources'])
         self.generate()
 
     def test_ignored_content_changes_require_review_before_regeneration(self):
@@ -202,7 +224,7 @@ class RegenerationTests(unittest.TestCase):
         replacement = self.generate(['two.pdf'])[0]
         self.assertEqual(first['filename'], replacement['filename'])
         states = {e['path']: e['status'] for e in self.scan()['entries']}
-        self.assertEqual(states, {'SPX/one.pdf': 'MISSING', 'SPX/two.pdf': 'DONE'})
+        self.assertEqual(states, {'SPX/one.pdf': 'READY', 'SPX/two.pdf': 'DONE'})
         next_file = self.generate(['one.pdf'])[0]
         self.assertTrue(next_file['filename'].endswith('_2.docx'))
 

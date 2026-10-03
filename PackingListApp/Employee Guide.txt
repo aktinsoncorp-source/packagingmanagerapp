@@ -1,6 +1,6 @@
 PACKING LIST MANAGER
-Employee guide - version 1.11.0
-Help updated September 28, 2026
+Employee guide - version 1.11.1
+Help updated October 3, 2026
 
 Start
 Double-click Packing List Manager.exe. Keep the App Files folder beside it.
@@ -128,8 +128,7 @@ Daily steps
 2. Save downloaded PDFs anywhere inside the selected dated folder, or click
    Add PDFs. SPX and FLASH subfolders let Auto select the correct courier.
    For a generic Shopee file elsewhere, choose its Courier in the table.
-3. Click Scan for new PDFs. New files and files missing their generated output
-   are selected automatically. Processed files stay selectable: tick Use
+3. Click Scan for new PDFs. New orders are selected automatically. Processed files stay selectable: tick Use
    to generate them again. Click the checkbox in the Use column header to
    select all compatible PDFs, including processed ones. Click it again to
    clear all selections. A partial check means some eligible rows are selected.
@@ -168,11 +167,11 @@ Processed status
 Completed rows show Process again. Tick Use and click Generate Packing Lists if
 you need another PDF. The repeat warning will ask before creating another copy.
 The status no longer lists PDF/Word formats. Scan again after deleting an output:
-if no current output covers the orders, it shows Output missing. Older Word outputs
+if no current output covers the orders, they become new orders again. Older Word outputs
 remain recognized in Completed documents and processing history.
 
 Selected totals
-Below the PDF list, Selected shows the number of checked PDFs, orders and pieces.
+Below the PDF list, Selected shows the number of checked PDFs and distinct orders.
 It updates immediately when you tick or untick Use, or use the select-all checkbox.
 Only checked platforms are listed: SPX, FLASH, LAZADA and/or TIKTOK. Highlighting a
 row without ticking Use does not add it to the total. Matching order IDs across
@@ -242,12 +241,12 @@ If you delete a generated PDF or Word file
 Click Scan for new PDFs. The program checks which PDF or Word files still exist
 inside this date's 000 Output folder and matches them to their source PDFs.
 If orders no longer have a current output document, the affected PDF rows show
-Output missing and are selected automatically. Click Generate Packing Lists
+new orders ready and are selected automatically. Click Generate Packing Lists
 to create a new numbered copy from those selected PDFs.
 If another current copy still covers every order, the PDF remains Processed;
 you can tick Use to generate it again anyway. A superseded revision does not
 count as a current copy. Moving or renaming a generated file away from its recorded
-name in 000 Output is treated as missing.
+name in 000 Output resets its orders to new unless another current copy exists.
 A PDF may contain both covered and missing orders. When selected, its full
 contents are included in the new document. Its picking summary matches that
 new document only.
@@ -425,3 +424,8 @@ Write the name of the person who packed that order on the Employee line.
 The employee field appears after the order identifier and before Number.
 Existing Word documents keep their saved layout. To add the field to an older
 batch, select its source PDFs again and generate a new numbered document.
+
+Output order totals (version 1.11.1)
+Each output shows Total orders above its batch/platform headings. Individual
+batch headings retain their labels and source filenames without an order count.
+The main PDF list shows Orders without a Pieces column.

@@ -2,7 +2,7 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.11.0**.
+Current engine version: **1.11.1**.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -76,7 +76,7 @@ A Git bundle is a portable copy of committed repository history. To restore a
 provided bundle into a new folder:
 
 ```powershell
-git clone "Git/v1.11.0/PackingListManager-1.11.0.bundle" "PackingListManager-Restored"
+git clone "Git/v1.11.1/PackingListManager-1.11.1.bundle" "PackingListManager-Restored"
 ```
 
 This restores the tracked program files. It does not restore the installed
@@ -160,3 +160,10 @@ copies are checked before moving. Open processing log uses the hidden location.
 All 113 regression tests and packaged migration/regeneration checks passed. Four live
 dates were migrated with record hashes preserved and all 13 completed documents
 unchanged. Local source/history checkpoint: `Git/v1.11.0`.
+
+## Version 1.11.1
+
+See [Release Notes](PackingListApp/Release%20Notes.txt) for the new functions.
+114 regressions passed, followed by 17 final regeneration checks. The final
+packaged app passed PDF/Word layout verification on all four platforms and
+Windows UI checks. Local checkpoint: `Git/v1.11.1`.

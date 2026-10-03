@@ -16,4 +16,5 @@ $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Windows application compilation failed.' }
 Copy-Item -LiteralPath (Join-Path $project 'Employee Guide.txt') -Destination $release -Force
 Copy-Item -LiteralPath (Join-Path $project 'src\assets\packing-list-icon.ico') -Destination (Join-Path $release 'Packing List Manager.ico') -Force
+Copy-Item -LiteralPath (Join-Path $project 'Release Notes.txt') -Destination $release -Force
 Write-Output $release

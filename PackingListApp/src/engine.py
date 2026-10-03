@@ -21,7 +21,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf
 from documents import build_document, verify_word
 
-VERSION = '1.11.0'
+VERSION = '1.11.1'
 INTERNAL = '.PackingData'
 HISTORY = INTERNAL + '/Processing_History.json'
 LOG = INTERNAL + '/Processed_Files.txt'
@@ -370,6 +370,33 @@ def available_order_outputs(folder, history):
     return available
 
 
+def forget_deleted_outputs(folder, history):
+    """Remove deleted-file coverage; retain immutable manifests only for audit."""
+    missing = [name for name in history['outputs']
+               if not safe_child(folder / '000 Output', name).is_file()]
+    if not missing:
+        return
+    for name in missing:
+        output = history['outputs'].pop(name)
+        history.setdefault('archived_outputs', []).append(
+            {'filename': name, **output, 'archived_at': datetime.now().isoformat(),
+             'reason': 'Output deleted; processing coverage cleared'})
+    available = available_order_outputs(folder, history)
+    for key, order in list(history['orders'].items()):
+        if order.get('output') not in missing:
+            continue
+        copies = available.get((key, order['fingerprint']), [])
+        if not copies:
+            del history['orders'][key]
+        elif order.get('output') not in copies:
+            order['output'] = copies[0]
+    for key, source in list(history['sources'].items()):
+        source['order_keys'] = [k for k in source.get('order_keys', []) if k in history['orders']]
+        source['outputs'] = [n for n in source.get('outputs', []) if n in history['outputs']]
+        if not source['order_keys']:
+            del history['sources'][key]
+
+
 def batch_details(batch, old=None):
     parts = [f'{batch.platform} | {len(batch.orders)} orders | {batch.pieces} pieces', '']
     if old:
@@ -458,6 +485,7 @@ def scan_internal(folder):
                                'details': str(exc), 'orders': 0, 'pieces': 0, 'new_orders': 0, 'sha256': digest, 'outputs': []}
     history = load_history(folder, batches)
     upgrade_output_links(folder, history)
+    forget_deleted_outputs(folder, history)
     available = available_order_outputs(folder, history)
     occurrences = defaultdict(list)
     for key, batch in batches.items():
@@ -544,7 +572,7 @@ def scan(folder, catalog_path=None):
             entries, batches, history = scan_internal(folder)
             # Save associations while legacy documents still exist, so a later
             # deletion never destroys the PDF-to-output mapping.
-            if history['outputs'] and (not (out / HISTORY).exists() or
+            if (history['outputs'] or history.get('archived_outputs')) and (not (out / HISTORY).exists() or
                     json.loads((out / HISTORY).read_text(encoding='utf-8')) != history):
                 atomic_json(out / HISTORY, history)
     else:

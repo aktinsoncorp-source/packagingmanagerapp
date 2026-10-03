@@ -242,3 +242,12 @@ hidden journal/stage recovery. test_workflow.py covers pre-app logs and old root
 recovery. qa/release111_smoke.py takes the candidate and a copied version-1.10 dated
 fixture; it exercises packaged migration, No, missing-output regeneration and main UI.
 Historical smoke tools may contain old raw metadata paths; use current smoke tests.
+
+## Version 1.11.1
+
+The main PDF grid and selected totals omit pieces. Documents show Total orders
+before the first batch/platform heading, without per-batch counts. On scan or
+generation, deleted outputs move to archived_outputs; their active order/source
+coverage is cleared unless another current copy survives. Audit snapshots are
+retained but excluded from repeat detection. Zero-output resets are saved too.
+Current packaged checks: qa/release1111_smoke.py; release notes: Release Notes.txt.
