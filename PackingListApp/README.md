@@ -251,3 +251,25 @@ generation, deleted outputs move to archived_outputs; their active order/source
 coverage is cleared unless another current copy survives. Audit snapshots are
 retained but excluded from repeat detection. Zero-output resets are saved too.
 Current packaged checks: qa/release1111_smoke.py; release notes: Release Notes.txt.
+
+## Item sales Excel export (same version 1.11.1)
+
+`sales_export` exports all readable current PDFs under the dated folder to
+`000 Output/YYYY-MM-DD_Item_Sales_N.xlsx`. It ignores Use checkboxes and packing
+completion, deduplicates platform/order keys, rejects conflicting/changed source
+reviews, and verifies source hashes again before atomic no-overwrite publication.
+Courier-unassigned Shopee orders can be tallied because sales use SHOPEE identity.
+The same folder lock serializes export naming; staging stays in hidden .PackingData.
+No new packing history, processing log or name definitions are written by export.
+
+Item Sales contains machine-readable flat rows with date, product_name, variation,
+quantity, distinct order_count and platform quantities. Order Items preserves raw
+and final names, text order IDs, quantities, source paths/hashes and fingerprints.
+Export Info records date scope, totals, catalog revision and full-snapshot semantics.
+String cells are explicitly text, including formula-like names and long numeric IDs.
+Reopened workbook rows must match the computed source totals before publication.
+
+The app uses its existing openpyxl dependency; Microsoft Excel is not required to
+create the workbook. Export opens it using the workstation's default spreadsheet app.
+QA: test_sales.py and sales_smoke.py cover quantities, aliases, duplicates, errors,
+numbering, unchanged history, packaged export and the actual Windows action.

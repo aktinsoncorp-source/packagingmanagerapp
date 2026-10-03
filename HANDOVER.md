@@ -354,3 +354,16 @@ final history guard. Final packaged smoke: qa/release-1.11.1-verification.json.
 whole-order/summary pagination checks; six PDF pages and main UI were visually
 reviewed. 301 installed files match the tested candidate; ProductNames.json,
 its backup and Settings.json retain their hashes. No production PDFs regenerated.
+
+## Same-version 1.11.1 item sales export - October 3, 2026
+
+Export Item Sales creates a date-first XLSX of quantities only for the full dated
+source folder, independently of Use selections and processed-output status. It uses
+current Define Name mappings, counts matching orders once, and retains raw order
+lines for future ERP reconciliation. Each export is a full-date snapshot.
+122 regressions passed. qa/sales-verification.json records packaged generation of
+15 item/variation pairs, 30 units, 17 orders across all platforms with a duplicate
+source present. Windows button and courier/totals checks passed. Excel opened the
+three sheets; Item Sales and Export Info rendering was inspected. Previous installed
+1.11.1 is preserved in qa/previous-release-1.11.1-before-sales. Prior Git/v1.11.1
+checkpoint files remain; the additional bundle ends in -ItemSales.bundle.

@@ -3,3 +3,4 @@ Version 1.11.1
 - The PDF list shows order counts without Pieces.
 - Each output shows its total orders above the batch headings, with no per-batch order counts.
 - Deleted outputs reset their orders to new, ready to process again.
+- Export daily units sold by item and variation to date-first Excel files, with order details for inventory and ERP reconciliation.

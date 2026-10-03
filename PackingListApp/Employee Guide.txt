@@ -429,3 +429,19 @@ Output order totals (version 1.11.1)
 Each output shows Total orders above its batch/platform headings. Individual
 batch headings retain their labels and source filenames without an order count.
 The main PDF list shows Orders without a Pieces column.
+
+Export item sales to Excel (version 1.11.1)
+Choose the date, then click Export Item Sales. The workbook opens in Excel and
+is saved in that date's 000 Output folder as YYYY-MM-DD_Item_Sales_1.xlsx.
+Later exports increase the final number and never replace an existing file.
+This report includes ALL readable source PDFs for the selected date, regardless
+of Use checkboxes or whether packing lists were generated. Duplicate order IDs
+within a platform count once. SPX and FLASH both belong to Shopee.
+Item Sales shows product/variation quantities and platform quantities. Current
+Define Name alternatives combine matching items. Order Items retains original
+names, quantities, order IDs and source references. Export Info shows daily totals.
+The date is the selected folder date, not an inferred payment date. Quantities
+come from packing PDFs; prices, returns and cancellations are not inferred.
+Resolve conflicting or changed sources before exporting. Exporting does not mark
+orders processed. Each export is a full-date snapshot: for ERP imports replace
+that date's previous snapshot rather than adding repeated exports together.

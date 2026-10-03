@@ -880,6 +880,9 @@ def handle(request):
     folder = dated_folder(request['folder'])
     if action == 'courier': return set_courier(folder, request['selected'], request['carrier'])
     if action == 'scan': return scan(folder, catalog_path)
+    if action == 'sales_export':
+        from sales import export_sales
+        return export_sales(folder, catalog_path)
     if action == 'generate':
         if request.get('output_format', 'pdf') != 'pdf':
             raise PackingError('Packing List Manager exports PDF only.')

@@ -34,3 +34,5 @@
 - Store processing history, readable log, date lock, courier choices, transaction journal and new staging folders in Windows-hidden 000 Output/.PackingData. This is persistent data, never temporary cleanup. Migrate legacy root records under the date lock using resumable renames; preserve conflicting copies and report an error rather than overwriting. Generated documents remain directly in 000 Output. Open processing log must read its hidden path. Preserve legacy interrupted transaction paths during recovery.
 
 - Output documents show their total order count above batch/platform headings. Keep batch labels and source filenames, without per-batch order counts.
+
+- Export Item Sales creates a date-first Excel quantity report in the dated 000 Output folder (YYYY-MM-DD_Item_Sales_N.xlsx), with units per item/variation and original order details. Use the full selected date, current Define Name alternatives, platform/order deduplication, and no prices. Sales export does not mark orders processed. Each export is a full-date snapshot for ERP replacement, not an incremental import. Preserve existing files and the same app version unless a new version is requested.

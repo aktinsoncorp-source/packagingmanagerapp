@@ -54,6 +54,7 @@ namespace PackingListManager {
         readonly Button addButton = new Button();
         readonly Button generateButton = new Button();
         readonly Button outputButton = new Button();
+        readonly Button salesButton = new Button();
         readonly Button reviewButton = new Button();
         readonly Button sourceButton = new Button();
         readonly Button historyButton = new Button();
@@ -103,6 +104,7 @@ namespace PackingListManager {
                         if(!selectionTotalsWork)throw new Exception("Selection totals verification failed.");
                         if(!selectAllWorks)throw new Exception("Select-all verification failed.");
                         if(startupArgs.Contains("--select-for-preview"))ToggleAllUse();
+                        if(startupArgs.Contains("--check-sales")) { await ExportSales(); if(lastError!=null)throw new Exception(lastError); }
                         if (startupArgs.Length >= 3) {
                             using (var bitmap = new Bitmap(Width,Height)) {
                                 DrawToBitmap(bitmap,new Rectangle(Point.Empty,Size));
@@ -264,12 +266,13 @@ namespace PackingListManager {
             StyleButton(namesButton,"Define Name...",false);namesButton.Width=150;namesButton.Click+=async(s,e)=>await ShowNames();secondary.Controls.Add(namesButton);
             layout.Controls.Add(secondary,0,5);
 
-            var final=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=3,Padding=new Padding(0,8,0,5)};
-            final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,260));final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));final.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
+            var final=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=4,Padding=new Padding(0,8,0,5)};
+            final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,260));final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,190));final.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,185));final.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
             StyleButton(generateButton,"Generate Packing Lists",true);generateButton.Dock=DockStyle.Fill;generateButton.Click+=async(s,e)=>await Generate();final.Controls.Add(generateButton,0,0);
             StyleButton(outputButton,"Open Output Folder",false);outputButton.Dock=DockStyle.Fill;outputButton.Click+=(s,e)=>{if(Directory.Exists(OutputFolder))OpenFile(OutputFolder);else MessageBox.Show(this,"The Output folder will appear after your first batch.","Output folder");};final.Controls.Add(outputButton,1,0);
             var hint=new Label {Text="A4  |  One table per order\nSPX / FLASH orange  ·  Lazada + TikTok blue",Dock=DockStyle.Fill,TextAlign=ContentAlignment.MiddleRight,Font=new Font("Segoe UI",9F),ForeColor=Color.FromArgb(82,96,112)};
-            final.Controls.Add(hint,2,0);layout.Controls.Add(final,0,6);
+            StyleButton(salesButton,"Export Item Sales",false);salesButton.Name="salesExportButton";salesButton.Dock=DockStyle.Fill;salesButton.Click+=async(s,e)=>await ExportSales();final.Controls.Add(salesButton,2,0);
+            final.Controls.Add(hint,3,0);layout.Controls.Add(final,0,6);
             var footer=new TableLayoutPanel {Dock=DockStyle.Fill,ColumnCount=2};footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,150));
             status.Text="Ready";status.Dock=DockStyle.Fill;status.Font=new Font("Segoe UI",9F);status.TextAlign=ContentAlignment.MiddleLeft;footer.Controls.Add(status,0,0);
             progress.Dock=DockStyle.Fill;progress.Style=ProgressBarStyle.Marquee;progress.Visible=false;progress.MarqueeAnimationSpeed=24;footer.Controls.Add(progress,1,0);layout.Controls.Add(footer,0,7);
@@ -375,7 +378,7 @@ namespace PackingListManager {
             selectAllUse.Enabled=!value;
             chooseButton.Enabled=!value;scanButton.Enabled=!value;addButton.Enabled=!value;date.Enabled=!value;
             grid.Enabled=!value;generateButton.Enabled=!value;reviewButton.Enabled=!value;sourceButton.Enabled=!value;historyButton.Enabled=!value;
-            namesButton.Enabled=!value;
+            namesButton.Enabled=!value;salesButton.Enabled=!value;
             if(!value)RefreshSelection();
         }
         async Task<Dictionary<string,object>> Call(Dictionary<string,object> request,string message) {
@@ -397,6 +400,16 @@ namespace PackingListManager {
                 if(!result.ContainsKey("ok")||!(bool)result["ok"])throw new Exception(S(result,"error"));
                 return result;
             } finally {Busy(false,"Ready");try{Directory.Delete(work,true);}catch{}}
+        }
+
+        async Task ExportSales() {
+            if(busy)return;
+            try {
+                var result=await Call(new Dictionary<string,object>{{"action","sales_export"}},"Exporting quantities for the full selected date...");
+                status.Text=S(result,"message");
+                if(!startupArgs.Contains("--self-test"))MessageBox.Show(this,S(result,"message")+"\n\nAll source PDFs for this date are included; Use checkboxes do not limit this report.\n\nSaved to:\n"+S(result,"path"),"Item sales exported",MessageBoxButtons.OK,MessageBoxIcon.Information);
+                if(!startupArgs.Contains("--self-test"))OpenFile(S(result,"path"));
+            } catch(Exception ex){ShowError(ex);}
         }
 
         public async Task Scan(bool preserveSelections=false) {
