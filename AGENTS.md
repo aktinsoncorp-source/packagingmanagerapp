@@ -21,13 +21,13 @@
 - Scan compatible PDFs anywhere under the selected dated folder except 000 Output. Hide unrecognized/no-readable-text PDFs; keep genuine errors in recognized packing lists visible for review.
 
 - Main screen labels have no step numbering. Generate exports PDF only with no format-selection dialog; the public engine must reject Word export requests. Existing PDF and Word outputs retain their history and numbering coverage.
-- Before generating repeated orders (earlier dated history or overlapping source PDFs), show the requested warning with a large centered No button as Enter/Escape default. Below it, place smaller light-gray borderless text reading Continue to Generate the Repeated Orders, centered within the No button width. Matching orders print once per run. Backend confirmation is tied to the selection and output format.
+- Before generating repeated orders (earlier dated history or overlapping source PDFs), show the requested warning with a large centered No button as Enter/Escape default. Below it, place dark borderless text reading Continue to Generate the Repeated Orders, matching the No button's font size and weight and centered within its width. Matching orders print once per run. Backend confirmation is tied to the selection and output format.
 - Define Name opens locked each time with icon-only closed/open padlocks. Locked mode permits search/view but disables changes and Excel editing. Unlock explicitly; save before relocking.
 - Use [     ] for Done boxes in both packing tables and picking summaries. Show dynamic totals for checked PDFs, distinct order IDs below the main list; omit the Pieces column and piece totals from the main list, with the selected platforms only.
 
 - Completed source rows show only Process again in Status. Deleted outputs clear active processing coverage and make uncovered orders new again; retain immutable audit snapshots. Retain review errors for orders with surviving outputs. Use alternating white/light-gray product rows in both order tables and picking summaries; preserve platform-colored headers and summary totals.
 
-- In the repeat warning, No generates only orders without an existing matching output; the gray continuation link includes earlier generated orders too. Enter/Escape choose No. If all selected orders are already covered, return a clear no-new-orders message and create no empty document. Missing output files remain regeneratable; new overlapping source orders print once. Do not show the sentence about matching orders appearing once in the warning.
+- In the repeat warning, No generates only orders without an existing matching output; the continuation link includes earlier generated orders too. Enter/Escape choose No. If all selected orders are already covered, return a clear no-new-orders message and create no empty document. Missing output files remain regeneratable; new overlapping source orders print once. Do not show the sentence about matching orders appearing once in the warning.
 - Keep the Define Name closed/open outline locks aligned on the same baseline, without enclosing circles or keyholes. Preserve existing lock behavior.
 - Keep performance changes local and retain source hashing, order/quantity verification, A4, whole-order and summary-row pagination checks. A summary wholly on one page proves that its rows do not split; multi-page summaries still require row checks.
 
@@ -41,7 +41,7 @@
 
 - Define Name Excel export must include all rows even when individual rows are locked. Preserve cell protection and import validation; do not unlock finished definitions to export. Skip formatting operations that Excel disallows on protected worksheets.
 
-- When Define Name opens, individual rows default locked only when both alternative product name and alternative variation are nonblank; blank or partial pairs start unlocked. Explicit row unlocking remains effective for that session, including saves/exports. Reopening reapplies these completion-based defaults.
+- When Define Name opens, individual rows default locked only when both alternative product name and alternative variation are nonblank; blank or partial pairs start unlocked. Successful Save names and Excel imports lock all resulting rows, including hidden, blank and partial rows, in the same save. Failed saves retain the current edits and locks. The automatic pre-export save preserves explicit row unlocks for Excel editing. Reopening reapplies the completion-based defaults.
 
 - Different new alternatives on unlocked linked Excel originals must import without a conflict warning: separate their complete alternative pairs into definitions while preserving every original, omitted pair, and the base ID. A single changed shared alternative still propagates. New matching definitions merge only after confirmation in the app; locked originals remain protected.
 

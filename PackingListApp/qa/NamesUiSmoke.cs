@@ -46,32 +46,38 @@ namespace PackingListManager {
                 Check(!await form.SaveNames()&&!await form.ExportToExcel()&&!await form.ImportFromExcel(),"Locked editor refuses every mutation entry point");
                 Check(form.SetEditLocked(false)&&!lockedGrid.ReadOnly&&lockedGrid.AllowUserToAddRows,"Unlock enables name editing");
                 var grid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
+                Check(form.SetAllRowLocks(false),"Explicitly unlock completed definitions before merging");
                 int prompts=0;string baseName="";
                 form.ConfirmMerge=g=>{prompts++;baseName=Convert.ToString(g["base_product"]);return false;};
                 Check(await form.SaveNames()&&prompts==1&&grid.Rows.Count==3,"Declining merge keeps two definitions");
+                Check(form.SetAllRowLocks(false),"Unlock saved definitions before confirming merge");
                 grid.ClearSelection();grid.CurrentCell=grid.Rows[1].Cells[0];grid.Rows[1].Selected=true;grid.Rows[0].Selected=true;
                 string firstSelected=Convert.ToString(((Dictionary<string,object>)grid.Rows[1].Tag)["id"]);
                 form.ConfirmMerge=g=>{prompts++;baseName=Convert.ToString(g["base_product"]);return true;};
                 Check(await form.SaveNames()&&prompts==2&&grid.Rows.Count==2,"Confirming merge leaves one definition");
                 Check(baseName=="SECOND ORIGINAL"&&Convert.ToString(((Dictionary<string,object>)grid.Rows[0].Tag)["id"])==firstSelected,"First selected row is kept as base");
                 Check(Convert.ToString(grid.Rows[0].Cells[4].Value)=="View (2)","Merged definition shows linked original count");
+                Check(grid.Rows[0].Cells[0].ReadOnly&&form.SetRowLocked(grid.Rows[0],false),"Merged definition is locked and can be unlocked again");
                 grid.CurrentCell=grid.Rows[0].Cells[2];grid.BeginEdit(true);
                 var editor=grid.EditingControl as TextBox;
                 Check(editor!=null&&!editor.Multiline&&editor.CharacterCasing==CharacterCasing.Upper,"Grid editor enforces single line and uppercase");
                 editor.Text="new standardized name   ";grid.EndEdit();
                 Check(Convert.ToString(grid.Rows[0].Cells[2].Value)=="NEW STANDARDIZED NAME","Grid trims trailing spaces and normalizes case");
                 Check(await form.SaveNames(),"Merged definition edits save");
+                Check(form.SetRowLocked(grid.Rows[0],false),"Unlock saved definition for validation checks");
                 grid.Rows[0].Cells[2].Value="First\nSecond";
                 string before=File.ReadAllText(catalog);
                 Check(!await form.SaveNames()&&File.ReadAllText(catalog)==before,"Programmatic multiline paste cannot save");
                 grid.Rows[0].Cells[2].Value="NEW STANDARDIZED NAME";
                 Check(await form.SaveNames(),"Correction after multiline rejection saves");
+                Check(form.SetRowLocked(grid.Rows[0],false),"Unlock merged definition for linked Excel edits");
                 Check(await form.ExportToExcel(),"Merged definition exports to Excel");
                 Check(Convert.ToInt32(form.excel.Workbook.Worksheets["Names"].UsedRange.Rows.Count)==3,"Excel exposes both linked originals for editing");
                 form.excel.Workbook.Worksheets["Names"].Range["A3"].Value2="Renamed linked original ";
                 form.excel.Workbook.Worksheets["Names"].Range["C3"].Value2="Updated shared name ";
                 Check(await form.ImportFromExcel(),"Linked original and shared alternative edits import");
                 Check(grid.Rows.Count==2&&File.ReadAllText(catalog).Contains("RENAMED LINKED ORIGINAL")&&File.ReadAllText(catalog).Contains("UPDATED SHARED NAME"),"Excel import preserves one merged definition");
+                Check(form.SetRowLocked(grid.Rows[0],false),"Unlock imported definition before adding matching originals");
                 Check(await form.ExportToExcel(),"Merged definition re-exports");
                 form.excel.Workbook.Worksheets["Names"].Range["A4"].Value2="Third original";
                 form.excel.Workbook.Worksheets["Names"].Range["B4"].Value2="Three";
@@ -85,6 +91,10 @@ namespace PackingListManager {
                 Check(grid.Rows[0].Visible,"Search finds linked originals as well as the base");
                 search.Clear();
                 using(var bitmap=new System.Drawing.Bitmap(form.Width,form.Height)){form.DrawToBitmap(bitmap,new System.Drawing.Rectangle(System.Drawing.Point.Empty,form.Size));bitmap.Save(Path.Combine(work,"merged-names.png"));}
+                Check(form.SetRowLocked(grid.Rows[0],false),"Explicitly unlock saved merged definition for deletion");
+                grid.ClearSelection();grid.Rows[0].Selected=true;
+                form.Controls.OfType<TableLayoutPanel>().First().Controls.OfType<FlowLayoutPanel>().SelectMany(p=>p.Controls.OfType<Button>()).Single(b=>b.Text=="Delete selected").PerformClick();
+                Check(await form.SaveNames()&&Rows(json.Deserialize<Dictionary<string,object>>(File.ReadAllText(catalog))["rows"]).Count==0,"Explicitly unlocked definition and linked originals can be deleted after auto-locking");
                 Check(form.SetEditLocked(true)&&lockedGrid.ReadOnly,"Saved name editor can be relocked");
                 form.Close();
             }
@@ -129,8 +139,9 @@ namespace PackingListManager {
                 form.excel.Workbook.Saved=true;form.excel.Application.Quit();
                 Check(!await form.ImportFromExcel()&&form.LastError==NameExcelSession.MissingMessage,"Exiting Excel is detected");
 
+                Check(form.SetAllRowLocks(false),"Unlock imported rows before correction workflow");
                 Check(await form.ExportToExcel(),"Export after Excel exit works");
-                saved=File.ReadAllText(catalog);form.excel.Workbook.Worksheets["Names"].Range["C2"].Value2=" Invalid";
+                saved=File.ReadAllText(catalog);form.excel.Workbook.Worksheets["Names"].Range["C2"].Value2="Invalid:Name";
                 Check(!await form.ImportFromExcel(),"Invalid alternative blocks import");
                 Check(File.ReadAllText(catalog)==saved&&form.excel.IsOpen()&&Enabled(form,"importNames"),"Invalid import retains workbook and original catalog for correction");
                 form.excel.Workbook.Worksheets["Names"].Range["C2"].Value2="Corrected name";

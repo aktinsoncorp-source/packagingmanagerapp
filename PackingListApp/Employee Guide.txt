@@ -142,7 +142,7 @@ Daily steps
    default. No (also Enter/Escape) generates orders that still need an output and
    skips orders already covered by a current generated document. If all are covered,
    the program says there are no new orders; it does not create an empty file.
-   To deliberately include previously generated orders, click the small gray text:
+   To deliberately include previously generated orders, click the bold continuation text:
    Continue to Generate the Repeated Orders
    That text has no button border. Closing with X cancels.
 6. Open and print the generated PDF in your PDF viewer. Use A4 paper.
@@ -185,8 +185,8 @@ Previously generated orders still trigger the warning if their output was delete
 The warning says:
 Warning: There are orders in this packing list that has repeated. Do you wish to
 continue and generate the repeating orders again?
-No is large, centered and highlighted. The smaller gray continuation text is
-centered underneath, within the width of No, and has no box. Click that text only
+No is large, centered and highlighted. The dark continuation text uses the same
+font size and bold weight, centered underneath within the width of No, with no box. Click that text only
 for an intentional reprint. No generates only orders without a current matching output.
 A deleted output can be generated again with No. An unprocessed order appearing in
 several source PDFs is still included once. Reviewed changes to an order remain
@@ -217,7 +217,7 @@ Give later source PDFs a new filename, such as 20260927_SPX_PL_2.pdf, and
 keep them in the same day's SPX folder. Keep earlier source files in place;
 replacing a processed PDF triggers a changed-file review.
 Existing batches are kept. Choose No in the repeat warning to generate only orders
-that still need a document. The gray continuation text includes earlier generated
+that still need a document. The continuation text includes earlier generated
 orders too. An order repeated across selected PDFs appears once in each new output
 batch. Uncheck PDFs you do not want.
 A renamed copy is identified as repeated and stays unchecked by default;
@@ -225,7 +225,7 @@ you can still tick it to generate another copy.
 
 Generating or printing an earlier batch again
 To make another copy, tick Use beside any processed PDF and click
-Generate Packing Lists. Confirm the repeat warning through the gray continuation
+Generate Packing Lists. Confirm the repeat warning through the continuation
 text only when a new PDF copy is intended. You can combine it with other selected PDFs.
 Each platform uses one more than its highest PDF or Word filename number still in
 000 Output. Existing files are never overwritten.
@@ -470,7 +470,7 @@ automatically, keeping the text from the first letter or digit onward.
 Use the top open padlock to enable editing. The padlock next to each original
 product locks/unlocks the entire definition, including linked originals. The two
 padlocks in that column heading lock/unlock ALL definitions, including hidden
-search results. Save names to retain row lock settings. Locked rows cannot be
+search results. Save names locks all rows again. Locked rows cannot be
 edited, deleted or merged; Excel import also protects their linked originals.
 Save edits before relocking a previously locked row. Define Name still opens
 with its overall editing lock closed each time.
@@ -499,7 +499,10 @@ Individual lock defaults
 Each time Define Name opens, a row starts locked when both the alternative
 product name and alternative variation are filled. If either field is blank,
 it starts unlocked. You can explicitly unlock a finished row to edit it during
-that session. Saving or exporting preserves your current session choices;
-opening Define Name again applies the default protection for finished rows.
+that session. Save names and successful Excel imports lock all rows again,
+including hidden search results and blank or partial alternatives. Unlock rows
+again when further edits are needed. Failed saves keep your edits and lock choices.
+Export preserves explicitly unlocked rows so they remain editable in Excel.
+Opening Define Name again applies the default protection for finished rows.
 All rows are included in Excel export. Protected sheets use their saved row
 heights, avoiding the Excel AutoFit error.

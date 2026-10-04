@@ -248,7 +248,7 @@ namespace PackingListManager {
             if(working||excel!=null)return false;
             if(value&&dirty){message.Text="Save your name changes before locking.";return false;}
             editLocked=value;RefreshExcelState();
-            message.Text=value?"Names are locked. Click the open-padlock icon to edit or use Excel.":"Editing unlocked. Save your changes, then click the closed-padlock icon to lock.";
+            message.Text=value?"Names are locked. Click the open-padlock icon to edit or use Excel.":"Editing unlocked. Unlock rows to edit them. Save names locks all rows again.";
             return true;
         }
         static Bitmap LockIcon(bool open) {
@@ -279,7 +279,8 @@ namespace PackingListManager {
         void ResetExcel(){if(excel!=null)excel.Dispose();excel=null;RefreshExcelState();}
         internal async Task<bool> ExportToExcel() {
             if(editLocked||excel!=null)return false;
-            if(!await SaveNames())return false;
+            // Save before exporting without relocking the rows selected for Excel editing.
+            if(!await SaveNames(false))return false;
             return await Run(async()=>{
                 excel=new NameExcelSession();
                 try {
@@ -299,7 +300,7 @@ namespace PackingListManager {
                 var preview=await call(new Dictionary<string,object>{{"action","names_import"},{"path",excel.FilePath},{"rows",CollectRows()}});
                 var saved=await SavePrepared(Rows(preview["rows"]),preview.ContainsKey("priority")?preview["priority"]:new string[0]);
                 revision=Convert.ToInt32(saved["revision"]);Fill(Rows(saved["rows"]));dirty=false;
-                ResetExcel();message.Text="Excel names imported and saved: "+preview["added"]+" added, "+preview["updated"]+" updated.";
+                ResetExcel();message.Text="Excel names imported and saved: "+preview["added"]+" added, "+preview["updated"]+" updated. All rows locked.";
                 if(preview.ContainsKey("separated")&&Convert.ToInt32(preview["separated"])>0)message.Text+=" Different linked alternatives separated into "+preview["separated"]+" additional definitions.";
             });
         }
@@ -366,7 +367,7 @@ namespace PackingListManager {
                 view.Controls.Add(list);view.Controls.Add(help);view.ShowDialog(this);
             }
         }
-        async Task<Dictionary<string,object>> SavePrepared(List<Dictionary<string,object>> pending,object priority) {
+        async Task<Dictionary<string,object>> SavePrepared(List<Dictionary<string,object>> pending,object priority,bool lockAllRows=true) {
             var preview=await call(new Dictionary<string,object>{{"action","names_prepare"},{"rows",pending},{"priority",priority}});
             var approvals=new List<object>();
             foreach(var group in Rows(preview["merges"])) {
@@ -379,15 +380,18 @@ namespace PackingListManager {
                 }
                 if(yes)approvals.Add(group["ids"]);
             }
-            return await call(new Dictionary<string,object>{{"action","names_save"},{"rows",preview["rows"]},{"revision",revision},{"merge_groups",approvals}});
+            // Retain explicit unlocks for saved rows removed by deletion or a confirmed merge.
+            var unlocked=savedRows.Keys.Where(r=>!lockedRows.Contains(r)&&r.Tag is Dictionary<string,object>).Select(r=>Convert.ToString(((Dictionary<string,object>)r.Tag)["id"])).ToArray();
+            return await call(new Dictionary<string,object>{{"action","names_save"},{"rows",preview["rows"]},{"revision",revision},{"merge_groups",approvals},{"lock_all",lockAllRows},{"unlocked_ids",unlocked}});
         }
-        internal async Task<bool> SaveNames() {
+        internal async Task<bool> SaveNames(bool lockAllRows=true) {
             if(editLocked)return false;
             return await Run(async()=>{
                 var pending=CollectRows();
                 var priority=selectionOrder.Where(r=>r.Tag is Dictionary<string,object>).Select(r=>Convert.ToString(((Dictionary<string,object>)r.Tag)["id"])).ToArray();
-                var result=await SavePrepared(pending,priority);
-                revision=Convert.ToInt32(result["revision"]);Fill(Rows(result["rows"]));dirty=false;message.Text="Names saved. They will be used in the next generated documents.";
+                var result=await SavePrepared(pending,priority,lockAllRows);
+                revision=Convert.ToInt32(result["revision"]);Fill(Rows(result["rows"]));dirty=false;
+                message.Text=lockAllRows?"Names saved. All rows locked. Unlock a row to edit it again.":"Names saved. They will be used in the next generated documents.";
             });
         }
     }

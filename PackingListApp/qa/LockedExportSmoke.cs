@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
@@ -37,13 +38,27 @@ namespace PackingListManager {
         static async Task Test() {
             var data=await Call(new Dictionary<string,object>{{"action","names_save"},{"revision",0},{"rows",new[]{
                 new {original_product="A LOCKED",original_variation="100ML",alternative_product="STANDARD A",alternative_variation="100ML",locked=true},
-                new {original_product="B EDITABLE",original_variation="1L",alternative_product="STANDARD B",alternative_variation="1L",locked=false}}}});
+                new {original_product="B EDITABLE",original_variation="1L",alternative_product="STANDARD B",alternative_variation="1L",locked=false},
+                new {original_product="C BLANK",original_variation="30ML",alternative_product="",alternative_variation="",locked=false},
+                new {original_product="D PARTIAL",original_variation="1KG",alternative_product="STANDARD D",alternative_variation="",locked=false}}}});
             using(var form=new NameDefinitionsForm(data,Call)) {
                 form.SuppressDialogs=true;form.StartPosition=FormStartPosition.Manual;form.Location=new System.Drawing.Point(-30000,-30000);form.Show();
                 Check(form.SetEditLocked(false),"Unlock overall editing; individual locks remain");
                 var grid=(DataGridView)form.Controls.Find("namesGrid",true)[0];
                 Check(grid.Rows[0].Cells[0].ReadOnly&&grid.Rows[1].Cells[0].ReadOnly,"Complete alternatives default locked");
                 Check(form.SetRowLocked(grid.Rows[1],false),"Explicitly unlock one completed definition");
+                grid.Rows[1].Cells["alternative_product"].Value="SAVED STANDARD B";
+                var search=(TextBox)typeof(NameDefinitionsForm).GetField("search",BindingFlags.NonPublic|BindingFlags.Instance).GetValue(form);
+                search.Text="B EDITABLE";
+                Check(await form.SaveNames(),"Save names relocks definitions: "+form.LastError);
+                Check(grid.Rows.Cast<DataGridViewRow>().Where(r=>!r.IsNewRow).All(r=>r.Cells[0].ReadOnly&&r.Cells[3].ReadOnly),"Save locks complete, blank, partial and filtered-out rows");
+                Check(Rows(json.Deserialize<Dictionary<string,object>>(File.ReadAllText(catalog))["rows"]).All(r=>(bool)r["locked"]),"All row locks saved in catalog");
+                search.Clear();
+                Check(form.SetRowLocked(grid.Rows[1],false),"Saved row can be explicitly unlocked again");
+                string before=File.ReadAllText(catalog);
+                grid.Rows[1].Cells["original_product"].Value="";
+                Check(!await form.SaveNames()&&!grid.Rows[1].Cells[0].ReadOnly&&File.ReadAllText(catalog)==before,"Failed save keeps unlocked edit and catalog intact");
+                grid.Rows[1].Cells["original_product"].Value="B EDITABLE";
                 Check(await form.ExportToExcel(),"Mixed locked/unlocked definitions export: "+form.LastError);
                 var sheet=form.excel.Workbook.Worksheets["Names"];
                 Check((bool)sheet.ProtectContents,"Export retains worksheet protection");
@@ -53,10 +68,11 @@ namespace PackingListManager {
                 sheet.Range["C3"].Value2="UPDATED STANDARD B";
                 Check(await form.ImportFromExcel(),"Unlocked edit imports with locked rows retained: "+form.LastError);
                 Check(File.ReadAllText(catalog).Contains("UPDATED STANDARD B"),"Unlocked edit saved");
+                Check(grid.Rows.Cast<DataGridViewRow>().Where(r=>!r.IsNewRow).All(r=>r.Cells[0].ReadOnly),"Excel import relocks every saved row");
                 Check(form.SetAllRowLocks(true),"Lock every definition");
                 Check(await form.ExportToExcel(),"All-locked definitions export: "+form.LastError);
                 Check((bool)form.excel.Workbook.Worksheets["Names"].ProtectContents,"All-locked workbook stays protected");
-                Check(Convert.ToInt32(form.excel.Workbook.Worksheets["Names"].UsedRange.Rows.Count)==3,"All locked definitions present");
+                Check(Convert.ToInt32(form.excel.Workbook.Worksheets["Names"].UsedRange.Rows.Count)==5,"All locked definitions present");
                 Check(await form.ImportFromExcel(),"Unchanged all-locked workbook imports");
                 Check(form.SetAllRowLocks(false)&&await form.ExportToExcel(),"Unlocked export still works");
                 Check(!(bool)form.excel.Workbook.Worksheets["Names"].ProtectContents,"Fully unlocked workbook permits editing");

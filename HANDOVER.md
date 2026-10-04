@@ -448,3 +448,25 @@ Installed and hash-verified all 301 package files. ProductNames.json, its backup
 and Settings.json retained their hashes. Previous release saved under
 qa/previous-release-1.11.1-before-sort-prices-20261004-030317. Existing production
 packing PDFs were not regenerated. Reopening the app loads the sorting controls.
+
+## Readable repeat continuation and automatic row locking - October 4, 2026
+
+Version remains 1.11.1. The repeat continuation uses the same 12-point bold font
+as No, with dark blue text; both controls share a centered 400-pixel width. No
+remains the Enter/Escape default. The updated dialog was visually reviewed.
+Save names and successful Excel imports lock all resulting definitions, including
+hidden, blank and partial rows, in the same atomic catalog write. Validation and
+merge confirmation run before relocking. Failed saves retain the current edits
+and locks. Explicit unlocks still allow subsequent edits, confirmed merges and
+deletions; the pre-export save keeps unlocked rows editable in Excel. Reopening
+retains the completion-based defaults. The overall editing gate is unchanged.
+
+All 158 regressions, 112 native Excel/form workflow checks, 23 sorting checks
+and the existing dialog/control/default-lock harnesses passed. Evidence:
+qa/save-locks-final-regression.log, qa/save-locks-ui/*-final-*/result.json and
+qa/save-locks-installation.json. Candidate: qa/SaveLocksRelease. All 301 installed
+package files match the tested candidate; ProductNames.json, its backup and
+Settings.json retained their hashes. The previous installation is preserved in
+qa/previous-release-1.11.1-before-save-locks-58e585bc9da44aa8bee8d922f586783f.
+Local bundle: Git/v1.11.1/PackingListManager-1.11.1-SaveLocks.bundle. Previous
+checkpoints remain; no upload or production packing document regeneration.

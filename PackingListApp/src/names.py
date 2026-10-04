@@ -192,7 +192,12 @@ def load_catalog(path):
         return _load(path)
 
 
-def save_catalog(path, rows, revision, merge_groups=()):
+def save_catalog(path, rows, revision, merge_groups=(), lock_all=False, unlocked_ids=()):
+    if not isinstance(lock_all, bool):
+        raise PackingError('Invalid save row-lock option.')
+    if not isinstance(unlocked_ids, (list, tuple)) or any(not isinstance(i, str) for i in unlocked_ids):
+        raise PackingError('Invalid unlocked definition identifiers.')
+    unlocked_ids = set(unlocked_ids)
     validated = merge_rows(rows, merge_groups)
     with catalog_lock(path):
         current = _load(path)
@@ -201,8 +206,13 @@ def save_catalog(path, rows, revision, merge_groups=()):
         incoming = {r['id']: r for r in validated}
         for old in current['rows']:
             new = incoming.get(old['id'])
-            if old.get('locked') and (new is None or (new.get('locked') and new != old)):
+            if old.get('locked') and old['id'] not in unlocked_ids and (new is None or (new.get('locked') and new != old)):
                 raise PackingError('Unlock the definition before changing or deleting its names.')
+        # Validate edits and confirmed merges while their explicit unlocks still apply.
+        # Relock the final definitions in the same atomic catalog write.
+        if lock_all:
+            for row in validated:
+                row['locked'] = True
         if current['rows'] != validated:
             current = {'schema': 2, 'revision': revision + 1, 'rows': validated}
             _write(path, current)

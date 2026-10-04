@@ -64,7 +64,7 @@ The 16 synthetic regeneration tests require no production PDFs or Microsoft Word
 & .\.venv\Scripts\python.exe -m unittest discover -s .\PackingListApp\qa -p test_regeneration.py -v
 ```
 
-The full suite contains 113 tests. Several tests and development
+The full suite contains 158 tests. Several tests and development
 helpers require the private September 24-26 source PDFs and approved Word files
 at their original dated paths. Those fixtures and generated QA reports are not
 distributed in Git. Restore them separately before running the full suite.

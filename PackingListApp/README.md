@@ -183,8 +183,9 @@ fixtures and verify backward-compatible output history; it is not an employee ex
 option. Earlier Word-specific smoke scripts target version 1.8 or older. Use
 qa/release19_smoke.py for current packaged checks.
 
-RepeatWarning centers a 330 x 54 No button and keeps it as AcceptButton/CancelButton.
-A smaller gray LinkLabel below it says Continue to Generate the Repeated Orders,
+RepeatWarning centers a 400 x 54 No button and keeps it as AcceptButton/CancelButton.
+A dark LinkLabel below it says Continue to Generate the Repeated Orders,
+using the same 12-point bold font as No,
 with no border or underline and no greater width than No. Clicking that link explicitly
 approves; the warning token protocol and repeat detection are unchanged.
 
@@ -315,8 +316,9 @@ all-locked and unlocked export/import sessions using actual Excel.
 ## Define Name opening lock defaults (1.11.1)
 
 Constructor Fill(..., opening=true) copies catalog rows and assigns the initial
-lock from both alternative fields being nonblank. Later Fill calls retain saved
-session choices, so explicit unlocks work through save and Excel export. Opening
+lock from both alternative fields being nonblank. Save names and successful Excel
+imports lock every resulting definition, including hidden, blank and partial rows.
+The pre-export save preserves explicit unlocks for the Excel edit session. Opening
 the dialog does not mutate catalog objects or write private data by itself.
 DefaultLocksSmoke.cs checks complete, partial and whitespace pairs;
 LockedExportSmoke.cs verifies default locking and 17 real Excel round-trip checks.
@@ -369,3 +371,20 @@ controls/default locks checks and 36 actual Excel/form import checks passed.
 Packaged generation verified 17 orders and all 12 Shopee price lines against
 source PDFs. Real Word verified A4/whole orders and a 75-order multipage summary;
 all six sample packing/summary pages and the black-arrow UI were visually reviewed.
+
+## Readable repeated-order continuation and save locks (1.11.1)
+
+The continuation label matches No's 12-point bold font and uses dark blue text.
+Both share a centered 400-pixel width, keeping the whole label readable. No is
+still the Enter/Escape default; generation decisions remain unchanged.
+
+Save names and successful Excel imports send lock_all to names_save. The engine
+validates changes and confirmed merges first, then sets every resulting definition
+locked in the same atomic catalog write. Failed saves do not alter locks. The UI
+retains explicit unlock identifiers for definitions removed by deletion or merge,
+so unlocking a saved row still permits those operations. The automatic pre-export
+save uses lock_all=false to preserve rows unlocked for Excel editing. Opening
+defaults remain based on complete alternatives; the overall editing gate stays
+independent. All 158 regressions and 112 actual Excel/form checks passed. The
+installed candidate and private-data preservation are recorded in
+qa/save-locks-installation.json. Local checkpoint ends in -SaveLocks.bundle.

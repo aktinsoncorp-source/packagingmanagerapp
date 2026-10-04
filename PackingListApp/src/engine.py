@@ -877,7 +877,7 @@ def handle(request):
     catalog_path = Path(request.get('catalog_path', default_root / 'ProductNames.json')).resolve()
     if action == 'names_list': return {'ok': True, **load_catalog(catalog_path)}
     if action == 'names_prepare': return prepare_save(request['rows'], request.get('priority', []))
-    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []))}
+    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []), lock_all=request.get('lock_all', False), unlocked_ids=request.get('unlocked_ids', []))}
     if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))
     if action == 'names_import': return import_excel(Path(request['path']), request['rows'])
     folder = dated_folder(request['folder'])
