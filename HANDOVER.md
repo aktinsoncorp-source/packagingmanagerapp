@@ -544,3 +544,29 @@ Evidence: qa/v1112-final-regression.log, qa/v1112-verification.json,
 qa/v1112-full-date-names.json, qa/v1112-installation.json and qa/Release1112/SelfTest.json.
 Local source checkpoint and verified bundle: Git/v1.11.2. The installed app keeps
 the Packing List Manager name. Production outputs were not regenerated.
+
+## v1.11.2 column-position correction - October 5, 2026
+
+SPX/FLASH now match the supplied column positions: Done 7%, Product name 39.7%,
+Variation 11.7%, Pieces 11.7%, Unit Price 19.4%, Total Price 10.5%. Price headers
+and amounts align right. Buyer comments use separate label/content cells, with
+the divider at 19.1% of the table width. A grid boundary inside the merged product
+cell allows that divider without moving product columns or changing the A4 width.
+Order verification and legacy Word reading use logical cells, retaining all six
+product fields and accepting both earlier one-cell and corrected two-cell comments.
+
+All 169 regressions passed. Real-source packaged verification checked 17 orders,
+prices, comments, preserved fingerprints and Excel exports. Word validated SPX
+and FLASH samples plus 14 orders with long comments across pages. Rendered samples
+and both stress-document order pages were visually checked against the reference.
+Evidence: qa/v1112-columns-regression.log, qa/v1112-columns-verification.json,
+qa/v1112-column-layout/verification.json and qa/v1112-columns-installation.json.
+Candidate: qa/ColumnLayoutRelease.
+
+Only installed documents.py, engine.py and release notes changed. The open GUI,
+saved names, catalog backup and settings retained their hashes. The engine starts
+a new process per operation, so the next export uses the correction without a UI
+restart. Replaced files are preserved at
+qa/v1112-before-columns-363d03a4f1d54294a7f959fc6d55d409.
+Version remains 1.11.2; its earlier tag and bundle remain. The new verified local
+checkpoint bundle ends in -Columns.bundle under Git/v1.11.2.

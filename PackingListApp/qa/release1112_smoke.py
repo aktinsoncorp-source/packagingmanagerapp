@@ -89,11 +89,11 @@ for output in result['outputs']:
                 priced = order.platform in ('SPX', 'FLASH')
                 if priced and order.buyer_comment:
                     comment_row = rows.pop()
-                    assert len(comment_row) == 1
+                    assert len(comment_row) == 2
                     # Some Word emoji glyphs have no extractable text. Verify the
                     # complete string below in the immutable printed snapshot.
-                    assert comment_row[0].startswith(COMMENT_LABEL)
-                    assert ' '.join(comment_row[0][len(COMMENT_LABEL):].split()) in order.buyer_comment or order.buyer_comment in comment_row[0]
+                    assert comment_row[0] == COMMENT_LABEL
+                    assert comment_row[1] in order.buyer_comment or order.buyer_comment in comment_row[1]
                     comments += 1
                 wanted = [['[ ]', clean(i.product), clean(i.variation), str(i.pieces)] + (item_prices(i) if priced else []) for i in order.items]
                 assert rows == wanted, (identifier, rows, wanted)

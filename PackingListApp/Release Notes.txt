@@ -1,5 +1,5 @@
 Version 1.11.2
 
-- SPX and FLASH include a buyer-comment row only when a comment is present.
+- SPX and FLASH use the requested column widths and separate buyer-comment label/text cells when a comment is present.
 - Define Name matches product names and variations regardless of spaces or PDF wrapping.
 - Lazada variations show values without attribute labels.

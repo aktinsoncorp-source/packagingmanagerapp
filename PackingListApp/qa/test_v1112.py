@@ -11,7 +11,7 @@ APP = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(APP / 'src'))
 from docx import Document
 from extractors import Batch, Item, Order, ShopeePart, PackingError, combine_shopee_parts, shopee_page
-from documents import build_document, COMMENT_LABEL
+from documents import build_document, COMMENT_LABEL, order_cells
 from engine import read_completed_doc
 import names
 
@@ -116,12 +116,21 @@ class BuyerCommentTests(unittest.TestCase):
                         d = Document(path); expected = platform in ('SPX', 'FLASH') and bool(comment)
                         self.assertEqual(len(d.tables[0].rows), 4 if expected else 3)
                         if expected:
-                            self.assertEqual(d.tables[0].rows[-1].cells[0].text, COMMENT_LABEL + ' ' + comment)
+                            self.assertEqual([c.text for c in order_cells(d.tables[0].rows[-1])], [COMMENT_LABEL, comment])
                             self.assertTrue(d.tables[0].rows[-2].cells[0].paragraphs[0].paragraph_format.keep_with_next)
                         self.assertNotIn(COMMENT_LABEL, '\n'.join(c.text for r in d.tables[-1].rows for c in r.cells))
                         saved = read_completed_doc(path, group)[order.key]['order']
                         self.assertEqual(saved['buyer_comment'], comment if expected else '')
                         self.assertEqual(saved['items'][0]['pieces'], 2)
+                        if expected:
+                            # Earlier 1.11.2 documents used one merged comment cell.
+                            cells = order_cells(d.tables[0].rows[-1])
+                            merged = cells[0].merge(cells[1])
+                            merged.text = COMMENT_LABEL + ' ' + comment
+                            d.save(path)
+                            old = read_completed_doc(path, group)[order.key]['order']
+                            self.assertEqual(old['buyer_comment'], comment)
+                            self.assertEqual(old['items'], saved['items'])
 
     def test_continuations_keep_comments_and_reject_conflicts(self):
         def part(first, comment):

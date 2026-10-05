@@ -12,7 +12,7 @@ import tempfile
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.table import Table
+from docx.table import Table, _Cell
 from docx.shared import Pt, Twips
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.text.paragraph import Paragraph
@@ -23,6 +23,11 @@ from picking import picking_rows
 
 ASSETS = Path(__file__).resolve().parent / 'assets'
 COMMENT_LABEL = "BUYER'S COMMENT:"
+
+
+def order_cells(row):
+    """Logical order cells, without repeated entries for horizontally merged cells."""
+    return [_Cell(tc, row._parent) for tc in row._tr.tc_lst]
 
 
 def item_prices(item):
@@ -36,7 +41,7 @@ def item_prices(item):
 def add_price_columns(table):
     """Keep the A4 table width, shared order header, borders and row styles."""
     total = sum(int(column.w) // 635 for column in table._tbl.tblGrid.gridCol_lst)
-    widths = [round(total * fraction) for fraction in (.07, .42, .23, .07, .105)]
+    widths = [round(total * fraction) for fraction in (.07, .397, .117, .117, .194)]
     widths.append(total - sum(widths))
     for row in table.rows[1:]:
         for _ in range(2):
@@ -56,8 +61,9 @@ def add_price_columns(table):
             cell.width = Twips(width)
     for cell, title in zip(table.rows[1].cells[4:], ('Unit Price', 'Total Price')):
         set_text(cell.paragraphs[0], title)
-    for cell in table.rows[2].cells[4:]:
         cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    for cell in table.rows[2].cells[4:]:
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
 
 def set_text(paragraph, text):
@@ -69,6 +75,35 @@ def set_text(paragraph, text):
         target = next((r for r in runs if r.text), runs[-1])
         for r in runs:
             r.text = text if r is target else ''
+
+
+def add_comment_row(table, row_proto, comment):
+    # Add a grid boundary inside Product name so the comment label can have its
+    # own narrow cell without moving any of the six product-column boundaries.
+    grid = table._tbl.tblGrid
+    total = sum(int(column.w) // 635 for column in grid.gridCol_lst)
+    label_width = round(total * .191)
+    first_width = int(grid.gridCol_lst[0].w) // 635
+    product_width = int(grid.gridCol_lst[1].w) // 635
+    grid.gridCol_lst[1].set(qn('w:w'), str(label_width - first_width))
+    extra = OxmlElement('w:gridCol')
+    extra.set(qn('w:w'), str(product_width - label_width + first_width))
+    grid.insert(2, extra)
+    table.rows[0]._tr.tc_lst[0].get_or_add_tcPr().get_or_add_gridSpan().val = 7
+    for row in table.rows[1:]:
+        row._tr.tc_lst[1].get_or_add_tcPr().get_or_add_gridSpan().val = 2
+    row = deepcopy(row_proto)
+    for cell in list(row.tc_lst)[2:]:
+        row.remove(cell)
+    table._tbl.append(row)
+    for cell, width, span, text in zip(order_cells(table.rows[-1]),
+                                      (label_width, total - label_width), (2, 5),
+                                      (COMMENT_LABEL, comment)):
+        cell._tc.get_or_add_tcPr().get_or_add_gridSpan().val = span
+        cell.width = Twips(width)
+        set_text(cell.paragraphs[0], text)
+        cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+        cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), 'FFFFFF')
 
 
 def set_order_header(paragraph, platform, order_id):
@@ -151,17 +186,9 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
                     fill = 'FFFFFF' if item_no % 2 == 0 else 'F2F2F2'
                     cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), fill)
             if prices and order.buyer_comment:
-                tbl.append(deepcopy(row_proto))
-                for cell in table.rows[-1].cells:
-                    set_text(cell.paragraphs[0], '')
-                cell = table.rows[-1].cells[0].merge(table.rows[-1].cells[-1])
-                for paragraph in cell.paragraphs[1:]:
-                    cell._tc.remove(paragraph._p)
-                set_text(cell.paragraphs[0], COMMENT_LABEL + ' ' + order.buyer_comment)
-                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
-                cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), 'FFFFFF')
+                add_comment_row(table, row_proto, order.buyer_comment)
             for row_no, row in enumerate(table.rows):
-                for cell in row.cells:
+                for cell in order_cells(row):
                     for p in cell.paragraphs:
                         p.paragraph_format.keep_together = True
                         p.paragraph_format.keep_with_next = row_no < len(table.rows)-1
@@ -212,8 +239,8 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
         expected = [[i.product, i.variation, str(i.pieces)] + (item_prices(i) if prices else []) for i in order.items]
         has_comment = prices and bool(order.buyer_comment)
         item_rows = table.rows[2:-1] if has_comment else table.rows[2:]
-        rows = [[c.text for c in row.cells[1:]] for row in item_rows]
-        if has_comment and table.rows[-1].cells[0].text != COMMENT_LABEL + ' ' + order.buyer_comment:
+        rows = [[c.text for c in order_cells(row)[1:]] for row in item_rows]
+        if has_comment and [c.text for c in order_cells(table.rows[-1])] != [COMMENT_LABEL, order.buyer_comment]:
             raise PackingError(f'Document verification failed for buyer comment on order {order.order_id}.')
         header = table.cell(0, 0).text
         expected_header = f"{'Order Number' if order.platform == 'LAZADA' else 'Order ID'}: {order.order_id}\tEmployee:__________________\tNumber __________\tTime __________"
