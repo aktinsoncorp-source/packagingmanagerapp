@@ -570,3 +570,16 @@ restart. Replaced files are preserved at
 qa/v1112-before-columns-363d03a4f1d54294a7f959fc6d55d409.
 Version remains 1.11.2; its earlier tag and bundle remain. The new verified local
 checkpoint bundle ends in -Columns.bundle under Git/v1.11.2.
+
+## v1.11.2 Lazada column spacing - October 5, 2026
+
+A nine-line Lazada-only block in documents.py sets Done/Product/Variation/Pieces
+widths to 7%/69.6%/11.7%/11.7%. It retains the four-column structure and A4 table
+width; TikTok and picking summaries keep their existing widths. All 19 relevant
+price/version tests passed. Real-source combined export passed Word's A4 and
+whole-order checks (seven orders, two pages); both PDF pages were visually checked.
+Evidence: PackingListApp/qa/v1112-lazada-columns/verification.json.
+Only documents.py and release notes were installed, with atomic backups in that
+QA folder. GUI and saved names/settings hashes were preserved. Version stays
+1.11.2; the next export uses the change. Local verified checkpoint bundle:
+Git/v1.11.2/PackingListManager-1.11.2-LazadaColumns.bundle.

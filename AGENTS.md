@@ -56,3 +56,5 @@
 - SPX/FLASH columns follow the supplied layout: Done 7%, Product name 39.7%, Variation 11.7%, Pieces 11.7%, Unit Price 19.4%, Total Price 10.5%. Right-align price headers and values. The optional buyer-comment row has a separate label cell (19.1% width) and content cell; its divider does not move the product columns.
 - Define Name source matching ignores whitespace in both product and variation, while display fields stay readable and single-line. Correct wrapped size digits for display, preserve raw source fingerprints, and reuse existing alternatives. Retain linked originals when removing an unlocked unfinished spacing duplicate; do not guess between conflicting finished definitions.
 - Lazada Define Name variations show attribute values separated by commas, without labels such as Scent, Size or Volume. Retain earlier labelled originals as links when normalizing existing definitions; preserve IDs, alternatives and locks. Keep changes narrowly scoped.
+
+- Lazada order tables use Done 7%, Product name 69.6%, Variation 11.7%, Pieces 11.7%; retain four columns, total A4 width and the existing TikTok and picking-summary layouts.

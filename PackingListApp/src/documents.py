@@ -170,6 +170,15 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
         for order in batch.orders:
             tbl = deepcopy(table_proto)
             table = Table(tbl, d._body)
+            if order.platform == 'LAZADA':
+                total = sum(column.width.twips for column in table.columns)
+                widths = [round(total * fraction) for fraction in (.07, .696, .117)]
+                widths.append(total - sum(widths))
+                for column, width in zip(table.columns, widths):
+                    column.width = Twips(width)
+                for row in table.rows[1:]:
+                    for cell, width in zip(row.cells, widths):
+                        cell.width = Twips(width)
             header = table.cell(0, 0).paragraphs[0]
             set_order_header(header, order.platform, order.order_id)
             row_proto = deepcopy(table.rows[2]._tr)
