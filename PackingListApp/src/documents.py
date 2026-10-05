@@ -22,6 +22,7 @@ from picking import picking_rows
 
 
 ASSETS = Path(__file__).resolve().parent / 'assets'
+COMMENT_LABEL = "BUYER'S COMMENT:"
 
 
 def item_prices(item):
@@ -149,6 +150,16 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
                     set_text(cell.paragraphs[0], text)
                     fill = 'FFFFFF' if item_no % 2 == 0 else 'F2F2F2'
                     cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), fill)
+            if prices and order.buyer_comment:
+                tbl.append(deepcopy(row_proto))
+                for cell in table.rows[-1].cells:
+                    set_text(cell.paragraphs[0], '')
+                cell = table.rows[-1].cells[0].merge(table.rows[-1].cells[-1])
+                for paragraph in cell.paragraphs[1:]:
+                    cell._tc.remove(paragraph._p)
+                set_text(cell.paragraphs[0], COMMENT_LABEL + ' ' + order.buyer_comment)
+                cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
+                cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), 'FFFFFF')
             for row_no, row in enumerate(table.rows):
                 for cell in row.cells:
                     for p in cell.paragraphs:
@@ -199,7 +210,11 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
         raise PackingError('Document verification failed: order count mismatch.')
     for table, order in zip(actual.tables, (o for b in batches for o in b.orders)):
         expected = [[i.product, i.variation, str(i.pieces)] + (item_prices(i) if prices else []) for i in order.items]
-        rows = [[c.text for c in row.cells[1:]] for row in table.rows[2:]]
+        has_comment = prices and bool(order.buyer_comment)
+        item_rows = table.rows[2:-1] if has_comment else table.rows[2:]
+        rows = [[c.text for c in row.cells[1:]] for row in item_rows]
+        if has_comment and table.rows[-1].cells[0].text != COMMENT_LABEL + ' ' + order.buyer_comment:
+            raise PackingError(f'Document verification failed for buyer comment on order {order.order_id}.')
         header = table.cell(0, 0).text
         expected_header = f"{'Order Number' if order.platform == 'LAZADA' else 'Order ID'}: {order.order_id}\tEmployee:__________________\tNumber __________\tTime __________"
         if rows != expected or header != expected_header:

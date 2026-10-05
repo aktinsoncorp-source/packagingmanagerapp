@@ -3,8 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 
-[assembly: System.Reflection.AssemblyVersion("1.11.1.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.11.1.0")]
+[assembly: System.Reflection.AssemblyVersion("1.11.2.0")]
+[assembly: System.Reflection.AssemblyFileVersion("1.11.2.0")]
 
 // Runs the readable engine source with its private, unmodified CPython runtime.
 // Keep the existing request/response command line and process exit status.

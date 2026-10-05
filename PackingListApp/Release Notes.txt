@@ -1,6 +1,5 @@
-Version 1.11.1
+Version 1.11.2
 
-- Product and size sorting use independent original/alternative fields, with black arrows and clear direction labels.
-- SPX and FLASH packing lists include source unit prices and line totals.
-- Repeated-order continuation matches No's font size and weight with dark text.
-- Save names and successful Excel imports lock all rows again.
+- SPX and FLASH include a buyer-comment row only when a comment is present.
+- Define Name matches product names and variations regardless of spaces or PDF wrapping.
+- Lazada variations show values without attribute labels.

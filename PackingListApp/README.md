@@ -5,6 +5,13 @@ The whole application folder is portable. It includes its Python runtime. Window
 
 This directory contains development files, sanitized document templates, build dependencies and QA evidence.
 
+Current version: 1.11.2. Buyer comments appear in SPX/FLASH order tables only when
+present. Backend definition matching ignores whitespace, repairs wrapped size
+digits for readable display, and removes Lazada variation attribute labels.
+Raw PDF items and existing fingerprints stay unchanged. Existing completed
+definitions are reused; earlier labelled or unfinished spacing originals stay
+linked when their display definition is normalized.
+
 ## Components
 
 - `src/PackingListManager.cs`: Windows Forms interface; invokes the packaged engine with JSON requests.

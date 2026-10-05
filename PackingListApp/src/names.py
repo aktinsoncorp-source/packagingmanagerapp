@@ -5,10 +5,11 @@ from pathlib import Path
 import copy
 import json
 import os
+import re
 import shutil
 import uuid
 
-from extractors import Item, PackingError
+from extractors import Item, PackingError, clean
 
 FIELDS = ('original_product', 'original_variation', 'alternative_product', 'alternative_variation')
 HEADERS = ('Original product name', 'Original variation', 'Alternative product name', 'Alternative variation', 'Entry ID', 'Original pair')
@@ -23,6 +24,44 @@ def single_line(value, label):
 
 def item_key(product, variation):
     return product.rstrip(' ').upper(), variation.rstrip(' ').upper() or '—'
+
+
+def definition_pair(product, variation, platform=''):
+    """Readable definition fields; raw PDF items and fingerprints stay unchanged."""
+    if platform == 'LAZADA':
+        # Attribute labels delimit values; values may themselves contain spaces.
+        labels = r'(?:^|[,;\n])\s*[^:,;\n]+:\s*|\b(?:Scent|Scents|Size|Volume|Color|Colour|Net_Content|Fragrance Oil|Packs per Bundle|Set)\s*:\s*'
+        variation = re.sub(labels, ', ', variation, flags=re.I).strip(' ,;\n')
+        variation = re.sub(r'\s*,\s*', ', ', variation)
+    # A narrow Shopee column can wrap anywhere within a printed size's digits.
+    variation = re.sub(r'\d(?:[\d\s]*\d)?(?=\s*(?:ML|L|G|KG|LITER|LITRE)\b)',
+                       lambda m: re.sub(r'\s+', '', m[0]), variation, flags=re.I)
+    return item_key(clean(product), clean(variation))
+
+
+def lookup_key(product, variation, platform=''):
+    return tuple(re.sub(r'\s+', '', value) for value in definition_pair(product, variation, platform))
+
+
+def definition_mapping(rows, platform=''):
+    mapping = {}
+    for row in rows:
+        for source in source_pairs(row):
+            key = lookup_key(source['original_product'], source['original_variation'], platform)
+            matches = mapping.setdefault(key, [])
+            if not any(existing is row for existing in matches):
+                matches.append(row)
+    return mapping
+
+
+def matched_definition(matches, product, variation):
+    defined = [r for r in matches if r['alternative_product'] or r['alternative_variation']]
+    if len({(r['alternative_product'], r['alternative_variation']) for r in defined}) > 1:
+        exact = [r for r in defined if any(item_key(s['original_product'], s['original_variation']) == item_key(product, variation) for s in source_pairs(r))]
+        if not exact:
+            raise PackingError(f'Conflicting saved alternatives for spacing variants of {product} / {variation}. Review these definitions before generating.')
+        return exact[0]
+    return next(iter(defined or matches), {})
 
 
 def validate_alternative(value, label):
@@ -223,29 +262,52 @@ def encounter(path, batches):
     """Remember source pairs on PDF scan, including all linked merged originals."""
     with catalog_lock(path):
         current = _load(path)
-        known = {item_key(s['original_product'], s['original_variation']) for r in current['rows'] for s in source_pairs(r)}
-        rows = list(current['rows'])
+        rows = copy.deepcopy(current['rows'])
         for batch in batches:
+            mapping = definition_mapping(rows, batch.platform)
             for order in batch.orders:
                 for item in order.items:
-                    key = item_key(item.product, item.variation)
-                    if key not in known:
-                        rows.append(dict(zip(FIELDS, [key[0], key[1], '', ''])))
-                        known.add(key)
-        if len(rows) != len(current['rows']):
+                    key = lookup_key(item.product, item.variation, batch.platform)
+                    matches = mapping.get(key, [])
+                    row = matched_definition(matches, item.product, item.variation)
+                    if not row:
+                        product, variation = definition_pair(item.product, item.variation, batch.platform)
+                        row = dict(zip(FIELDS, [product, variation, '', '']))
+                        rows.append(row)
+                        mapping[key] = [row]
+                    elif row['alternative_product'] or row['alternative_variation']:
+                        # Retire only unfinished, unlocked spacing duplicates. Keep
+                        # their original pairs linked to the existing finished row.
+                        for duplicate in list(matches):
+                            if duplicate is row or duplicate.get('locked') or duplicate['alternative_product'] or duplicate['alternative_variation']:
+                                continue
+                            if any(lookup_key(s['original_product'], s['original_variation'], batch.platform) != key for s in source_pairs(duplicate)):
+                                continue
+                            row.setdefault('aliases', []).extend(source_pairs(duplicate))
+                            rows.remove(duplicate)
+                            matches.remove(duplicate)
+                    if batch.platform == 'LAZADA' and ':' in row['original_variation']:
+                        pair = definition_pair(row['original_product'], row['original_variation'], 'LAZADA')
+                        occupied = any(item_key(s['original_product'], s['original_variation']) == pair
+                                       for other in rows if other is not row for s in source_pairs(other))
+                        if not occupied and pair != item_key(row['original_product'], row['original_variation']):
+                            row.setdefault('aliases', []).append({f: row[f] for f in FIELDS[:2]})
+                            row.update(zip(FIELDS[:2], pair))
+        if rows != current['rows']:
             current = {'schema': 2, 'revision': current['revision'] + 1, 'rows': validate_rows(rows)}
             _write(path, current)
         return current
 
 
 def apply_names(batches, catalog):
-    mapping = {item_key(s['original_product'], s['original_variation']): r for r in catalog['rows'] for s in source_pairs(r)}
-    def display(item):
-        row = mapping.get(item_key(item.product, item.variation), {})
+    def display(item, platform, mapping):
+        row = matched_definition(mapping.get(lookup_key(item.product, item.variation, platform), []), item.product, item.variation)
+        product, variation = definition_pair(item.product, item.variation, platform)
         # The PDF item/fingerprint stays untouched. Only the printed copy changes.
-        return replace(item, product=(row.get('alternative_product') or item_key(item.product, item.variation)[0]).rstrip(' ').upper(),
-                       variation=(row.get('alternative_variation') or item_key(item.product, item.variation)[1]).rstrip(' ').upper())
-    return [replace(b, orders=[replace(o, items=[display(i) for i in o.items]) for o in b.orders]) for b in batches]
+        return replace(item, product=(row.get('alternative_product') or product).rstrip(' ').upper(),
+                       variation=(row.get('alternative_variation') or variation).rstrip(' ').upper())
+    return [replace(b, orders=[replace(o, items=[display(i, b.platform, mapping) for i in o.items]) for o in b.orders])
+            for b in batches for mapping in [definition_mapping(catalog['rows'], b.platform)]]
 
 
 def export_excel(path, catalog):

@@ -46,6 +46,7 @@ class Order:
     platform: str
     order_id: str
     items: list[Item] = field(default_factory=list)
+    buyer_comment: str = ''
 
     @property
     def key(self):
@@ -131,14 +132,16 @@ def shopee_page(page, platform, page_num):
             left, top = col * page.width / 2, row * page.height / 2
             p = page.crop((left, top, left + page.width / 2, top + page.height / 2))
             txt = p.extract_text() or ''
-            ids = re.findall(r'Order\s+ID\s*[:：]\s*([A-Z0-9]+)', txt)
+            comment = re.search(r"Buyer['\u2019]s\s+Comments?\s*:\s*(.*)\Z", txt, re.I | re.S)
+            label_text = txt[:comment.start()] if comment else txt
+            ids = re.findall(r'Order\s+ID\s*[:：]\s*([A-Z0-9]+)', label_text)
             if not ids:
                 if clean(txt):
                     raise PackingError(f'Page {page_num}: a Shopee label has text but no readable Order ID.')
                 continue
             if len(ids) not in (1, 2) or len(set(ids)) != 1:
                 raise PackingError(f'Page {page_num}: incomplete or unfamiliar Shopee order label. Review {ids[0]}.')
-            packages = re.findall(r'package\s+(\d+)', txt, flags=re.I)
+            packages = re.findall(r'package\s+(\d+)', label_text, flags=re.I)
             if packages != ['1'] * len(ids):
                 raise PackingError(f'Order {ids[0]}: multiple packages need review before packing.')
             words = p.extract_words(x_tolerance=1, y_tolerance=2)
@@ -154,8 +157,9 @@ def shopee_page(page, platform, page_num):
                 return matches[0]['x0'] - .25
             xproduct, xsku, xvar, xqty, xunit = [anchor(s) for s in ('Product', 'SKU', 'Variation', 'Qty', 'Unit')]
             xtotal = anchor('Total')
-            footer = [w for w in words if w['text'] == 'Order' and w['top'] > header_y]
-            if len(footer) != 1:
+            footer = [w for index, w in enumerate(words) if w['text'] == 'Order' and w['top'] > header_y
+                      and re.match(r'ID\s*[:：]\s*' + re.escape(ids[0]), ' '.join(v['text'] for v in words[index + 1:index + 4]))]
+            if not footer:
                 raise PackingError(f'Order {ids[0]}: product table ending is unclear.')
             end_y = footer[0]['top'] - .5
             starts = [w for w in words if re.fullmatch(r'\d+', w['text'])
@@ -180,7 +184,8 @@ def shopee_page(page, platform, page_num):
                 items.append(Item(product, variation, qty,
                                   source_price(region(p, xunit, y1, xtotal, y2), context),
                                   source_price(region(p, xtotal, y1, p.bbox[2], y2), context, 'total price')))
-            orders.append(ShopeePart(Order(platform, ids[0], items), numbers[0], numbers[-1]))
+            orders.append(ShopeePart(Order(platform, ids[0], items,
+                                          clean(comment[1]) if comment else ''), numbers[0], numbers[-1]))
     return orders
 
 
@@ -257,12 +262,16 @@ def combine_shopee_parts(parts):
         if order.key not in combined:
             if part.first_item != 1:
                 raise PackingError(f'Order {order.order_id}: continuation starts at item {part.first_item}, but its first section is missing.')
-            combined[order.key] = Order(order.platform, order.order_id, list(order.items))
+            combined[order.key] = Order(order.platform, order.order_id, list(order.items), order.buyer_comment)
         else:
             expected = last_items[order.key] + 1
             if part.first_item != expected:
                 raise PackingError(f'Order {order.order_id}: repeated or incomplete product section; expected item {expected}, found {part.first_item}.')
             combined[order.key].items.extend(order.items)
+            previous = combined[order.key].buyer_comment
+            if previous and order.buyer_comment and previous != order.buyer_comment:
+                raise PackingError(f'Order {order.order_id}: continued sections have different buyer comments. Review the source PDF.')
+            combined[order.key].buyer_comment = previous or order.buyer_comment
         last_items[order.key] = part.last_item
     return list(combined.values())
 

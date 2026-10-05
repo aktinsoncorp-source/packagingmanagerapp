@@ -2,7 +2,7 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.11.1**.
+Current engine version: **1.11.2**.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -167,3 +167,9 @@ See [Release Notes](PackingListApp/Release%20Notes.txt) for the new functions.
 114 regressions passed, followed by 17 final regeneration checks. The final
 packaged app passed PDF/Word layout verification on all four platforms and
 Windows UI checks. Local checkpoint: `Git/v1.11.1`.
+
+## Version 1.11.2
+
+SPX/FLASH packing lists include buyer comments only when present. Define Name
+matches spacing and wrapping variants against existing definitions; Lazada
+variations show values without attribute labels. Local checkpoint: `Git/v1.11.2`.

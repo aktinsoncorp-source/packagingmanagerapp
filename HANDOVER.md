@@ -503,3 +503,44 @@ qa/runtime-installation.json and qa/RuntimeRelease/SelfTest.json.
 The source checkpoint bundle ends in -RuntimeRestore.bundle in Git/v1.11.1.
 Earlier checkpoints and release notes remain. No production documents regenerated
 and no upload, renaming, quarantine restoration or security exclusions.
+
+## v1.11.2 - Buyer comments and definition normalization - October 5, 2026
+
+SPX/FLASH extract the source buyer-comment section separately from label metadata
+and print one full-width row inside the order table only for nonblank comments.
+Continued labels retain their comment; conflicting comments require review.
+The comment participates in whole-order pagination and both immutable snapshots,
+while item fingerprints, prices and quantity-only summaries remain unchanged.
+Legacy Word history accepts the optional comment row.
+
+Define Name scan/application matching ignores whitespace in original products and
+variations without changing raw PDF items or their fingerprints. Display remains
+readable and uppercase; wrapped size digits join correctly. Existing finished
+alternatives are reused. An unlocked blank spacing duplicate can be retired only
+when all its originals identify that same pair; those originals become aliases
+of the finished definition. Locked or differently linked rows are preserved, and
+conflicting completed alternatives are never silently selected for a new variant.
+Lazada attribute labels are removed from displayed definition variations. Earlier
+labelled originals stay as aliases with the base ID, alternatives and locks intact.
+The changes are confined to the parser, definition lookup, order table/history
+reader, version strings and release notes; other workflows remain in place.
+
+All 169 regressions passed. The packaged engine generated three A4 PDFs containing
+17 orders from real copied SPX/FLASH/Lazada/TikTok pages, including the reported
+Oxyherbs wrap and a buyer comment. The Oxyherbs output is OXYHERBS SCENT / 500 ML.
+Names Excel round trips, daily sales export, original/printed comment snapshots
+and v1.11.1 fingerprint compatibility passed. Word verified a further 14-order
+stress document with short, long and absent comments across pages. Three rendered
+pages were visually reviewed. Native UI and Windows Security candidate scan passed.
+All 12 current packing PDFs (349 orders, four with comments) parsed successfully;
+an isolated full-date catalog check retained every original pair and all finished
+IDs, alternative values and locks.
+
+Candidate: qa/Release1112. Installed and hash-verified 1,184 package files. Existing
+ProductNames.json, its backup and Settings.json retained their hashes; normalization
+runs on the next scan. Previous installation preserved at
+qa/previous-release-1.11.1-before-1.11.2-a65c1330e03c4e99a687105c533d1a1d.
+Evidence: qa/v1112-final-regression.log, qa/v1112-verification.json,
+qa/v1112-full-date-names.json, qa/v1112-installation.json and qa/Release1112/SelfTest.json.
+Local source checkpoint and verified bundle: Git/v1.11.2. The installed app keeps
+the Packing List Manager name. Production outputs were not regenerated.

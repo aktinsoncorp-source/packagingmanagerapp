@@ -21,7 +21,7 @@ from docx import Document
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf, source_price
 from documents import build_document, verify_word
 
-VERSION = '1.11.1'
+VERSION = '1.11.2'
 INTERNAL = '.PackingData'
 HISTORY = INTERNAL + '/Processing_History.json'
 LOG = INTERNAL + '/Processed_Files.txt'
@@ -208,10 +208,15 @@ def read_completed_doc(path, group):
         if platform == 'LAZADA':
             platform = 'LAZADA'
         priced = [c.text for c in table.rows[1].cells[4:]] == ['Unit Price', 'Total Price']
+        from documents import COMMENT_LABEL
+        item_rows = list(table.rows[2:])
+        comment = ''
+        if item_rows[-1].cells[0].text.startswith(COMMENT_LABEL):
+            comment = item_rows.pop().cells[0].text[len(COMMENT_LABEL):].strip()
         items = [Item(clean(r.cells[1].text), clean(r.cells[2].text), int(r.cells[3].text),
                       source_price(r.cells[4].text, f'Order {m[2]}') if priced else None,
-                      source_price(r.cells[5].text, f'Order {m[2]}', 'total price') if priced else None) for r in table.rows[2:]]
-        order = Order(platform, m[2], items)
+                      source_price(r.cells[5].text, f'Order {m[2]}', 'total price') if priced else None) for r in item_rows]
+        order = Order(platform, m[2], items, comment)
         records[order.key] = {'fingerprint': order.fingerprint(), 'order': asdict(order),
                               'output': path.name, 'source': 'Earlier completed document'}
     if summary_total is not None and summary_total != sum(i['pieces'] for r in records.values() for i in r['order']['items']):
