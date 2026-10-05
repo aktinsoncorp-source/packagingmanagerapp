@@ -11,6 +11,7 @@
 !/PackingListApp/src/
 !/PackingListApp/qa/
 !/PackingListApp/build.ps1
+!/PackingListApp/package_runtime.py
 !/PackingListApp/README.md
 !/PackingListApp/Employee Guide.txt
 !/PackingListApp/requirements.txt

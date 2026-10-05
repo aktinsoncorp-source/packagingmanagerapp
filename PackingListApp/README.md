@@ -43,9 +43,18 @@ Only existing files are returned to the Completed documents view. They are group
 
 ## Build
 
-Use Python 3.12 with pdfplumber, python-docx, openpyxl and PyInstaller 6.22.3. The current build uses Codex's bundled Python for PDF and document dependencies and project-local PyInstaller in `.builddeps`.
+Use 64-bit Python 3.12 with the pinned requirements. The current build copies the
+standard CPython runtime and installed dependencies, readable engine source and
+templates. `PackingEngine.exe` is a small .NET launcher; `python312._pth` keeps
+imports isolated from other Python installations. No Python installation is
+needed on an employee's computer. The app name remains Packing List Manager.
 
-Run `build.ps1`. It packages the engine and compiles the Windows Forms interface using the .NET Framework C# compiler. The program runs as the current user and has no network calls.
+Run `build.ps1 -ReleasePath <fresh-release-folder>`, verify that candidate, then
+install its App Files folder while preserving ProductNames.json and Settings.json.
+Full builds require a fresh App Files directory; `-UiOnly` retains its existing
+behavior. The script compiles the Windows Forms interface and engine launcher
+using the .NET Framework C# compiler. The program runs as the current user and
+has no network calls. Keep the entire Packing List Manager folder together.
 
 ## Verification completed September 26 2026
 

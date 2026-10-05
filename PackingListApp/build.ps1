@@ -4,12 +4,13 @@ $project = $PSScriptRoot
 $release = if ($ReleasePath) { [System.IO.Path]::GetFullPath($ReleasePath) } else { Join-Path (Split-Path $project -Parent) 'Packing List Manager' }
 New-Item -ItemType Directory -Path $release -Force | Out-Null
 if (-not $UiOnly) {
-$env:PYTHONPATH = Join-Path $project '.builddeps'
-& $Python -m PyInstaller --noconfirm --clean --onedir --name PackingEngine --distpath (Join-Path $project 'dist') --workpath (Join-Path $project 'build') --specpath $project --add-data ((Join-Path $project 'src\assets') + ';assets') --exclude-module tkinter --exclude-module numpy --exclude-module pandas --exclude-module matplotlib --exclude-module scipy --exclude-module IPython --exclude-module notebook (Join-Path $project 'src\engine.py')
-if ($LASTEXITCODE -ne 0) { throw 'Python packaging failed.' }
 $engineFolder = Join-Path $release 'App Files'
-New-Item -ItemType Directory -Path $engineFolder -Force | Out-Null
-Copy-Item -Path (Join-Path $project 'dist\PackingEngine\*') -Destination $engineFolder -Recurse -Force
+if (Test-Path -LiteralPath $engineFolder) { throw 'Use a fresh release folder for a full build, then install the verified App Files folder.' }
+& $Python (Join-Path $project 'package_runtime.py') $engineFolder
+if ($LASTEXITCODE -ne 0) { throw 'Python runtime packaging failed.' }
+$engineCompiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
+& $engineCompiler /nologo /target:exe /platform:x64 /optimize+ ('/out:' + (Join-Path $engineFolder 'PackingEngine.exe')) (Join-Path $project 'src\PackingEngineLauncher.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Engine launcher compilation failed.' }
 }
 $compiler = 'C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ ('/out:' + (Join-Path $release 'Packing List Manager.exe')) ('/win32manifest:' + (Join-Path $project 'src\app.manifest')) ('/win32icon:' + (Join-Path $project 'src\assets\packing-list-icon.ico')) /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll /reference:System.Windows.Forms.dll /reference:System.Web.Extensions.dll /reference:Microsoft.CSharp.dll (Join-Path $project 'src\PackingListManager.cs') (Join-Path $project 'src\PackingDialogs.cs') (Join-Path $project 'src\NameDefinitionsForm.cs') (Join-Path $project 'src\NameExcelSession.cs')

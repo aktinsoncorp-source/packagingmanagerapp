@@ -470,3 +470,36 @@ Settings.json retained their hashes. The previous installation is preserved in
 qa/previous-release-1.11.1-before-save-locks-58e585bc9da44aa8bee8d922f586783f.
 Local bundle: Git/v1.11.1/PackingListManager-1.11.1-SaveLocks.bundle. Previous
 checkpoints remain; no upload or production packing document regeneration.
+
+## Missing engine repair with app name preserved - October 5, 2026
+
+Version remains 1.11.1 and the name remains Packing List Manager. Windows Defender
+recorded removal of the installed frozen PackingEngine.exe at 08:13 and detected
+the saved candidate when it was checked. The existing UI executable and all 296
+runtime dependency files matched the previous verified release; only its engine
+executable was missing. No security protection was disabled or excluded.
+
+The replacement uses a small .NET PackingEngine.exe launcher, readable engine
+source and an unmodified private CPython 3.12 runtime with isolated ._pth imports.
+The public request/response interface and relative catalog location are preserved.
+Builds now require a fresh candidate App Files folder and copy installed pinned
+dependencies instead of using a frozen bootloader. The employee app executable,
+its filename/title, catalog, backup and settings retain their original hashes.
+
+All 158 regressions passed using PACKING_TEST_DATA=qa/names-regression-fixtures;
+the original dated business folders are no longer in the project root. Packaged
+checks verified Excel names round trips, date-first sales reports, Unicode paths,
+17 complete orders across all four platforms, prices and A4 in three generated
+PDFs. The exact existing UI executable passed its native scan, selection, history,
+Define Name and sales self-test against the new engine in an isolated copy. Both
+the candidate and installed application passed Windows Defender custom scans
+without a new detection. Installed names_list loaded all 881 saved definitions
+at revision 57 without changing the catalog or settings.
+
+Candidate: qa/RuntimeRelease. Installation hash-verified 1,568 engine package
+files; backup: qa/previous-release-1.11.1-before-runtime-2440c6cf564d47848e7d60d94818af4a.
+Evidence: qa/runtime-regression-fixtures.log, qa/runtime-verification.json,
+qa/runtime-installation.json and qa/RuntimeRelease/SelfTest.json.
+The source checkpoint bundle ends in -RuntimeRestore.bundle in Git/v1.11.1.
+Earlier checkpoints and release notes remain. No production documents regenerated
+and no upload, renaming, quarantine restoration or security exclusions.
