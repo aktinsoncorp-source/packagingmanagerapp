@@ -668,6 +668,9 @@ class PackingApp(tk.Tk):
     def _tree_click(self, event):
         if self.busy:
             return "break"
+        if self.tree.identify_region(event.x, event.y) == "heading" and self.tree.identify_column(event.x) == "#0":
+            self.toggle_all()
+            return "break"
         item, column = self.tree.identify_row(event.y), self.tree.identify_column(event.x)
         if not item:
             return
@@ -680,6 +683,8 @@ class PackingApp(tk.Tk):
             return "break"
 
     def _tree_double_click(self, event):
+        if self.tree.identify_region(event.x, event.y) == "heading":
+            return self._tree_click(event)
         if self.tree.identify_column(event.x) not in ("#0", "#3"):
             self.file_details()
         return "break"

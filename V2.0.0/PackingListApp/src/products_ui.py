@@ -75,7 +75,7 @@ class ProductsModel:
             for field in FIELDS:
                 row.setdefault(field, "")
             if opening:
-                row["locked"] = bool(row["alternative_product"].strip() and row["alternative_variation"].strip())
+                row["locked"] = True
             self.rows[row["id"]] = row
         self.saved = copy.deepcopy(self.rows)
         self.unlocked_ids: set[str] = set()
@@ -464,6 +464,9 @@ class ProductsDialog(tk.Toplevel):
         self.tree.bind("<<TreeviewSelect>>", self._selected)
         self.tree.bind("<Return>", lambda _e: self.edit_selected())
         self.tree.bind("<F2>", lambda _e: self.edit_selected())
+        self.tree.bind("<Control-c>", lambda _e: self.copy_selected())
+        self.tree.bind("<Control-C>", lambda _e: self.copy_selected())
+        self.tree.bind("<Button-3>", self._copy_menu)
         self.tree.bind("<Configure>", lambda _e: self._fit_columns(), add="+")
         self._tip(self.tree, self._tree_tip)
         under = ttk.Frame(outer, style="Products.TFrame")
@@ -494,7 +497,7 @@ class ProductsDialog(tk.Toplevel):
         self.import_button.pack(side="left", padx=(0, 8))
         self.delete_button.pack(side="left", padx=(0, 14))
         ttk.Label(advanced, text="* Unsaved changes (yellow rows)", style="Products.Muted.TLabel").pack(side="left")
-        self.status_var = tk.StringVar(value="Viewing products. Select a row to see Ecommerce Details, or use the open padlock above to edit.")
+        self.status_var = tk.StringVar(value="Viewing products. Ctrl+C or right-click copies names. Use the open padlock above to edit.")
         self.status_label = ttk.Label(outer, textvariable=self.status_var, style="Products.Muted.TLabel", wraplength=1120)
         self.status_label.grid(row=7, column=0, sticky="ew")
         self.progress = ttk.Progressbar(outer, mode="indeterminate", style="Loading.Horizontal.TProgressbar")
@@ -694,6 +697,38 @@ class ProductsDialog(tk.Toplevel):
         self.edit_selected()
         return "break"
 
+    def copy_selected(self, field=None):
+        fields = (field,) if field else tuple(key for key in self.tree.cget("displaycolumns") if key != "details")
+        selected = set(self.tree.selection())
+        rows = [self.model.rows[identity] for identity in self.tree.get_children() if identity in selected]
+        if rows:
+            self.clipboard_clear()
+            self.clipboard_append("\n".join("\t".join(str(row.get(key, "")) for key in fields) for row in rows))
+            self.status_var.set(f"Copied {LABELS[field] if field else 'selected rows'} to the clipboard.")
+        return "break"
+
+    def _copy_menu(self, event):
+        identity = self.tree.identify_row(event.y)
+        if not identity:
+            return
+        if identity not in self.tree.selection():
+            self.tree.selection_set(identity)
+        self.tree.focus_set()
+        menu = getattr(self, "copy_context_menu", None)
+        if menu is None:
+            menu = self.copy_context_menu = tk.Menu(self, tearoff=False)
+        else:
+            menu.delete(0, "end")
+        for field in self.tree.cget("displaycolumns"):
+            if field in LABELS:
+                menu.add_command(label="Copy " + LABELS[field], command=lambda key=field: self.copy_selected(key))
+        menu.add_separator()
+        menu.add_command(label="Copy selected rows", accelerator="Ctrl+C", command=self.copy_selected)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
     def sort(self, field):
         if self.busy:
             return
@@ -886,7 +921,7 @@ class ProductsDialog(tk.Toplevel):
         vertical.grid(row=0, column=1, sticky="ns")
         horizontal.grid(row=1, column=0, sticky="ew")
         add_column_dividers(tree)
-        full_text = tk.StringVar(value="Select a listing to read its full name and variation below.")
+        full_text = tk.StringVar(value="Select a listing to read its full name and variation. Ctrl+C copies the listing.")
         tree.tag_configure("selected", background=SELECTED, foreground=TEXT)
 
         def select_detail(_event=None):
@@ -897,12 +932,23 @@ class ProductsDialog(tk.Toplevel):
                 values = tree.item(selected[0], "values")
                 full_text.set("\n".join((str(values[2]), str(values[3]))))
         tree.bind("<<TreeviewSelect>>", select_detail)
+        def copy_detail(_event=None):
+            selected = tree.selection()
+            if selected:
+                dialog.clipboard_clear()
+                dialog.clipboard_append("\t".join(str(value) for value in tree.item(selected[0], "values")))
+            return "break"
+        tree.bind("<Control-c>", copy_detail)
+        tree.bind("<Control-C>", copy_detail)
         ttk.Label(frame, textvariable=full_text, wraplength=1000, style="Products.Muted.TLabel").grid(row=4, column=0, sticky="ew", pady=10)
 
         def done():
             dialog.destroy()
             self.grab_set()
-        ttk.Button(frame, text="Close details", command=done, style="Products.TButton").grid(row=5, column=0, sticky="e")
+        detail_actions = ttk.Frame(frame, style="Products.TFrame")
+        detail_actions.grid(row=5, column=0, sticky="ew")
+        ttk.Button(detail_actions, text="Copy selected listing", command=copy_detail, style="Products.TButton").pack(side="left")
+        ttk.Button(detail_actions, text="Close details", command=done, style="Products.TButton").pack(side="right")
         dialog.protocol("WM_DELETE_WINDOW", done)
         dialog.bind("<Escape>", lambda _e: done())
         dialog.grab_set()

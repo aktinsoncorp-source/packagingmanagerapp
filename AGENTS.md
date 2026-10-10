@@ -50,7 +50,7 @@
 
 - Define Name Excel export must include all rows even when individual rows are locked. Preserve cell protection and import validation; do not unlock finished definitions to export. Skip formatting operations that Excel disallows on protected worksheets.
 
-- When Define Name opens, individual rows default locked only when both alternative product name and alternative variation are nonblank; blank or partial pairs start unlocked. Successful Save names and Excel imports lock all resulting rows, including hidden, blank and partial rows, in the same save. Failed saves retain the current edits and locks. The automatic pre-export save preserves explicit row unlocks for Excel editing. Reopening reapplies the completion-based defaults.
+- When V2 Define Name opens, every individual row defaults locked, including blank and partial pairs. Locked mode permits viewing details and copying names without allowing edits. Successful Save names and Excel imports lock all resulting rows, including hidden, blank and partial rows, in the same save. Failed saves retain the current edits and locks. The automatic pre-export save preserves explicit row unlocks for Excel editing. Reopening locks all rows again.
 
 - Different new alternatives on unlocked linked Excel originals must import without a conflict warning: separate their complete alternative pairs into definitions while preserving every original, omitted pair, and the base ID. A single changed shared alternative still propagates. New matching definitions merge only after confirmation in the app; locked originals remain protected.
 

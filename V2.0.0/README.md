@@ -8,6 +8,8 @@ The main screen provides the date/folder, PDF selections, courier choices and **
 
 The approved Station Board design uses graphite gray and off-white, strong dividers, a prominent packing date, and document actions on the right. A full-width animated loading bar appears while work is running. Products uses the matching theme; an asterisk and yellow highlight identify unsaved rows. The interface is checked at 125% scaling in an 1100×688 window. This design update keeps version **2.0.0**.
 
+Click the **Use** heading to select all eligible PDFs, including **Process again** rows; click again to clear them. Every Define Names row opens locked, including unfinished rows. You can still view Ecommerce Details and copy with **Ctrl+C**, or right-click a row to copy its SKU, Product Name or Size. Editing requires explicit unlocking.
+
 Shopee is the master SKU source. Approved earlier Lazada SKUs remain linked so older packing lists still work. A changed listing title with the same SKU keeps the same inventory Product Name and Size. Older PDFs without a usable SKU can still use their existing name/variation definitions; the app does not invent a SKU or combine generic size-only codes across products.
 
 Flash packing headers and picking-summary headers use pastel yellow. SPX remains orange; Lazada and TikTok share blue outputs. All outputs retain A4 paper, whole-order tables, handwritten staff fields and quantity picking summaries.

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import sys
 import tkinter as tk
+from tkinter import ttk
 import unittest
 from unittest.mock import patch
 
@@ -23,13 +24,16 @@ def product(identity="rose", **overrides):
 
 
 class ProductsModelTests(unittest.TestCase):
-    def test_open_locks_only_complete_rows_without_mutating_catalog(self):
+    def test_open_locks_all_rows_without_mutating_catalog(self):
         rows = [product(), product("partial", alternative_variation=""), product("empty", alternative_product="", alternative_variation="", locked=True)]
         original = copy.deepcopy(rows)
         model = ProductsModel({"revision": 7, "rows": rows})
-        self.assertEqual([row["locked"] for row in model.rows.values()], [True, False, False])
+        self.assertEqual([row["locked"] for row in model.rows.values()], [True, True, True])
         self.assertEqual(rows, original)
         self.assertFalse(model.dirty)
+        for identity in ("partial", "empty"):
+            with self.assertRaises(ValueError):
+                model.edit(identity, {"alternative_product": "CHANGE"})
 
     def test_edit_retains_all_links_and_unknown_metadata(self):
         model = ProductsModel({"rows": [product()]})
@@ -180,11 +184,69 @@ class ProductsTkTests(unittest.TestCase):
     def test_pre_export_save_preserves_unlocks_and_hidden_rows(self):
         self.dialog.set_edit_locked(False)
         self.dialog.set_row_locked("rose", False)
+        self.dialog.set_row_locked("partial", False)
         self.dialog.search_var.set("no matching row")
         self.dialog.save_names(lock_all=False)
         self.assertEqual(len(self.requests[-1]["rows"]), 2)
         self.assertFalse(self.dialog.model.rows["rose"]["locked"])
         self.assertFalse(self.dialog.model.rows["partial"]["locked"])
+
+    @patch("tkinter.Misc.clipboard_clear")
+    @patch("tkinter.Misc.clipboard_append")
+    def test_locked_rows_can_copy_fields_and_visible_columns_without_edits(self, append, clear):
+        before = copy.deepcopy(self.dialog.model.rows)
+        self.assertTrue(all(row["locked"] for row in before.values()))
+        self.dialog.tree.selection_set("rose")
+        self.root.update()
+        self.assertIn("disabled", self.dialog.edit_button.state())
+        for field in ("sku", "alternative_product", "alternative_variation"):
+            self.dialog.copy_selected(field)
+            append.assert_called_with(before["rose"][field])
+        self.root.deiconify()
+        self.root.update()
+        self.dialog.tree.focus_force()
+        self.dialog.tree.event_generate("<Control-c>")
+        self.root.update()
+        append.assert_called_with("PERF-G-ROSE-W-100ML\tGOLDEA ROSE\t100ML")
+        self.dialog.show_ecommerce.set(True)
+        self.dialog._display_columns()
+        self.dialog.copy_selected("original_product")
+        append.assert_called_with("G. ROSE PERFUME")
+        self.assertEqual(clear.call_count, 5)
+        self.assertEqual(self.dialog.model.rows, before)
+        self.assertTrue(self.dialog.edit_locked)
+        self.assertFalse(self.dialog.model.dirty)
+
+    @patch("tkinter.Misc.clipboard_clear")
+    @patch("tkinter.Misc.clipboard_append")
+    def test_locked_row_details_stay_viewable_and_copyable(self, append, clear):
+        before = copy.deepcopy(self.dialog.model.rows)
+        self.dialog.tree.selection_set("rose")
+        self.root.update()
+        self.assertNotIn("disabled", self.dialog.details_button.state())
+        self.dialog.details_button.invoke()
+        self.root.update()
+        detail = next(widget for widget in self.dialog.winfo_children() if isinstance(widget, tk.Toplevel))
+
+        def descendants(widget):
+            for child in widget.winfo_children():
+                yield child
+                yield from descendants(child)
+
+        widgets = list(descendants(detail))
+        tree = next(widget for widget in widgets if isinstance(widget, ttk.Treeview))
+        first = tree.get_children()[0]
+        tree.selection_set(first)
+        self.root.update()
+        copy_button = next(widget for widget in widgets if isinstance(widget, ttk.Button) and widget.cget("text") == "Copy selected listing")
+        copy_button.invoke()
+        clear.assert_called_once_with()
+        append.assert_called_once_with("\t".join(tree.item(first, "values")))
+        self.assertIn("G. ROSE PERFUME", append.call_args.args[0])
+        self.assertEqual(self.dialog.model.rows, before)
+        self.assertTrue(self.dialog.edit_locked)
+        self.assertFalse(self.dialog.model.dirty)
+        detail.destroy()
 
     def test_125_percent_small_window_keeps_actions_and_primary_columns_visible(self):
         call = self.dialog.call_engine
