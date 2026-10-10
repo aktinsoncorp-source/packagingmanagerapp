@@ -5,8 +5,9 @@ product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
 Current release: **2.0.0**, in [V2.0.0](V2.0.0/README.md), approved for `main`.
 V2 uses SKU-based definitions and the Station Board Python desktop interface.
 Its local `V2.0.0/Release` folder contains a Windows installer and portable ZIP
-with a private Python runtime. Earlier V1 sources and the installed **1.11.2**
-application remain preserved in their original folders.
+with a private Python runtime. Setup defaults to `C:\Program Files\Packing List Manager`
+and supports reinstalling over an existing copy. Earlier V1 sources remain preserved;
+the previous Program Files installation was backed up under `Backups` before upgrade.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -15,9 +16,10 @@ only for the temporary Export/Edit/Import workflow; it is not needed to edit
 the catalog directly in the program. Keep the exported Excel workbook open
 until clicking Import. The program then saves, imports, closes and removes it.
 
-`ProductNames.json` and its preceding `.bak` file live beside the installed
-program and are private data excluded from Git. Copy them with the application
-when moving computers. Existing Word files retain their printed names.
+Installed V2 stores `ProductNames.json`, its `.bak`, `SkuCatalog.json` and settings
+in `%LOCALAPPDATA%\Packing List Manager`; portable/V1 copies keep data beside the
+program. These private files are excluded from Git. Back them up when moving
+computers. Existing Word files retain their printed names.
 
 V2 is maintained in [V2.0.0/PackingListApp](V2.0.0/PackingListApp/README.md).
 Employee instructions are in [V2 Employee Guide](V2.0.0/PackingListApp/Employee%20Guide.txt).

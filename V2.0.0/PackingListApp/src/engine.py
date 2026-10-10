@@ -1026,12 +1026,8 @@ def import_pdfs(folder, paths, carrier=None):
 def handle(request):
     action = request['action']
     from names import load_catalog, save_catalog, export_excel, import_excel, prepare_save
-    source = Path(__file__).resolve()
-    if source.parent.name == 'Source' and source.parent.parent.name == 'App Files':
-        default_root = source.parents[2]
-    else:
-        default_root = Path(sys.executable).parent.parent if getattr(sys, 'frozen', False) else source.parents[2] / 'Packing List Manager'
-    catalog_path = Path(request.get('catalog_path', default_root / 'ProductNames.json')).resolve()
+    from app_paths import default_data_dir
+    catalog_path = Path(request['catalog_path'] if 'catalog_path' in request else default_data_dir() / 'ProductNames.json').resolve()
     if action == 'names_list':
         from names import migrate_registry
         from product_attention import catalog_attention

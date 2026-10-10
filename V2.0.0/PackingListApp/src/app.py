@@ -21,7 +21,8 @@ from tkinter import font as tkfont
 VERSION = "2.0.0"
 _SOURCE_DIR = Path(__file__).resolve().parent
 _PACKAGED = _SOURCE_DIR.name == "Source" and _SOURCE_DIR.parent.name == "App Files"
-DATA_DIR = _SOURCE_DIR.parents[1] if _PACKAGED else _SOURCE_DIR.parents[1] / "Packing List Manager"
+from app_paths import default_data_dir
+DATA_DIR = default_data_dir()
 BG = "#f1f2ef"
 INK = "#24292c"
 MUTED = "#505b61"

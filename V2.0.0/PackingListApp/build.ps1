@@ -21,4 +21,9 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Release Notes.txt') -Destinatio
 foreach ($name in @('ProductNames.json', 'SkuCatalog.json')) {
     Copy-Item -LiteralPath (Join-Path $CatalogPath $name) -Destination $release
 }
+$defaults = Join-Path $release 'App Files\Defaults'
+New-Item -ItemType Directory -Path $defaults | Out-Null
+foreach ($name in @('ProductNames.json', 'SkuCatalog.json')) {
+    Copy-Item -LiteralPath (Join-Path $CatalogPath $name) -Destination $defaults
+}
 Write-Output "Packaged application: $release"

@@ -1,5 +1,9 @@
 Packing List Manager 2.0.0
 
+Setup now installs/reinstalls in Program Files with administrator approval.
+Daily use keeps writable data in Local AppData\Packing List Manager. Existing
+V2 names/settings migrate on first launch; reinstall never overwrites them.
+
 Excel import skips edits to locked rows and reports them while saving unlocked edits.
 Linked SKU rows remain together; choose one name and size if Excel edits disagree.
 Matching unlocked definitions for the same SKU merge when names are saved.
@@ -13,7 +17,7 @@ Lazada Order Number + Tracking Number preserves separate parcels and audit recor
 A4 PDFs, whole-order/shipment tables, picking summaries, repeat checks and sales export.
 
 Packaged Python/Tk application with a private runtime; no Python setup needed.
-Per-user Windows installer and portable ZIP. Existing product data survives reinstall
+All-users Windows installer and portable ZIP. Existing product data survives reinstall
 and uninstall. Microsoft Word desktop remains required for verified PDF export;
 Microsoft Excel desktop is needed for live Excel editing.
 

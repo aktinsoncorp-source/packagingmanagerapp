@@ -2,7 +2,9 @@ PACKING LIST MANAGER 2.0.0
 
 INSTALL
 Double-click Packing List Manager Setup 2.0.0.exe and follow the setup screens.
-The installer runs for your Windows account. No separate Python installation is needed.
+Setup installs in C:\Program Files\Packing List Manager and requests administrator
+permission. Run setup again to reinstall/update; close the app first. Daily use
+does not need administrator permission. No separate Python installation is needed.
 Microsoft Word desktop is required to create and verify packing PDFs.
 Microsoft Excel desktop is needed only for editing definitions with Excel.
 
@@ -25,7 +27,9 @@ If repeated orders are found, No includes only orders without a matching output.
 PRODUCTS AND UPDATES
 This package includes your approved SKU catalog and saved product definitions.
 Installing again preserves existing ProductNames.json, SkuCatalog.json and settings.
-Back up those files from the application folder before moving computers.
+For installed copies, back up those files from %LOCALAPPDATA%\Packing List Manager.
+An existing per-user V2 installation's names/settings are copied on first launch.
+Portable copies keep data beside the executable. Existing data is never replaced.
 Uninstall removes program files but keeps your saved product data. Source PDFs,
 generated packing lists and their dated processing histories are never removed.
 

@@ -6,9 +6,12 @@ import traceback
 
 
 def start():
-    root = Path(__file__).resolve().parents[2]
-    log_path = root / 'Startup.log'
+    from app_paths import default_data_dir
+    log_path = Path.home() / 'Packing List Manager Startup.log'
     try:
+        root = default_data_dir()
+        root.mkdir(parents=True, exist_ok=True)
+        log_path = root / 'Startup.log'
         with log_path.open('a', encoding='utf-8', buffering=1) as log, redirect_stdout(log), redirect_stderr(log):
             try:
                 from app import main
