@@ -4,7 +4,18 @@ import sys
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from app import PackingApp
+from app import PackingApp, selection_counts
+
+
+class ShipmentCountTests(unittest.TestCase):
+    def test_distinct_orders_and_lazada_shipments_count_separately(self):
+        entries = [dict(path='one.pdf', platform='LAZADA', status='READY', order_totals=[
+            {'key': 'LAZADA:001:TRACKING:A'}, {'key': 'LAZADA:001:TRACKING:B'}]),
+            dict(path='copy.pdf', platform='LAZADA', status='READY', order_totals=[
+                {'key': 'LAZADA:001:TRACKING:A'}])]
+        self.assertEqual(selection_counts(entries, {'one.pdf', 'copy.pdf'}),
+                         {'LAZADA': {'pdfs': 2, 'orders': 1, 'shipments': 2}})
+        self.assertEqual(selection_counts(entries, {'copy.pdf'}), {'LAZADA': {'pdfs': 1, 'orders': 1}})
 
 
 class UseHeadingTests(unittest.TestCase):

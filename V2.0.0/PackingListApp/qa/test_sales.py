@@ -114,7 +114,7 @@ class SalesTests(unittest.TestCase):
         self.source('one.pdf', 'SPX', [Order('SPX', 'A', [Item('Soap', 'Lemon', 2, '12.50')])])
         result=self.export()
         self.assertEqual(self.read(result)[1][8:], (12.5, 'Source unit price'))
-        self.assertEqual(self.read(result, 'Order Items')[1][-1], 12.5)
+        self.assertEqual(self.read(result, 'Order Items')[1][12], 12.5)
         self.source('two.pdf', 'SPX', [Order('SPX', 'B', [Item('Soap', 'Lemon', 1, '15.00')])])
         result=self.export()
         self.assertEqual(self.read(result)[1][8:], (None, 'Multiple source prices; see Order Items'))
@@ -126,6 +126,21 @@ class SalesTests(unittest.TestCase):
         with self.assertRaisesRegex(PackingError, 'No readable'):
             self.export()
         self.assertFalse(list((self.folder / '000 Output').glob('*.xlsx')))
+
+    def test_lazada_split_shipments_keep_quantities_and_tracking_without_counting_copies(self):
+        orders = [Order('LAZADA', '001234567890', [Item('Oil', '1 L', qty)], tracking_id=tracking)
+                  for tracking, qty in [('001234', 4), ('005678', 16)]]
+        self.source('split.pdf', 'LAZADA', orders)
+        self.source('copy.pdf', 'LAZADA', orders[:1])
+        result = self.export()
+        self.assertEqual((result['orders'], result['shipments'], result['quantity']), (1, 2, 20))
+        self.assertEqual(self.read(result)[1][3:5], (20, 1))
+        details = self.read(result, 'Order Items')
+        self.assertEqual(details[0][-1], 'tracking_id')
+        self.assertEqual({(row[2], row[8], row[-1]) for row in details[1:]},
+                         {('001234567890', 4, '001234'), ('001234567890', 16, '005678')})
+        info = dict(self.read(result, 'Export Info')[1:])
+        self.assertEqual((info['total_orders'], info['total_shipments']), (1, 2))
 
     def test_packing_history_unchanged_and_reprint_does_not_add_sales(self):
         self.source('SPX.pdf', 'SPX', [Order('SPX', 'A', [Item('Soap', 'Lemon', 2)])])

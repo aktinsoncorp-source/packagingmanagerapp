@@ -20,6 +20,8 @@ from docx import Document
 
 from extractors import Batch, Item, Order, PackingError, UnsupportedPdf, clean, file_hash, parse_pdf, source_price, normalize_sku
 from documents import build_document, verify_word
+from lazada_history import (legacy_key, output_key, output_keys, upgrade_tracking_links,
+                            unresolved_keys, prior_orders, source_keys, key_label)
 
 VERSION = '2.0.0'
 INTERNAL = '.PackingData'
@@ -217,7 +219,10 @@ def read_completed_doc(path, group):
         items = [Item(clean(r[1].text), clean(r[2].text), int(r[3].text),
                       source_price(r[4].text, f'Order {m[2]}') if priced else None,
                       source_price(r[5].text, f'Order {m[2]}', 'total price') if priced else None) for r in item_rows]
-        order = Order(platform, m[2], items, comment)
+        tracking = re.search(r'Tracking (?:ID|Number):\s*([^\s|]+)', head, re.I) if platform == 'LAZADA' else None
+        order = Order(platform, m[2], items, comment, tracking.group(1) if tracking else '')
+        if order.key in records:
+            raise PackingError(f'The earlier document {path.name} repeats order {key_label(order.key)}.')
         records[order.key] = {'fingerprint': order.fingerprint(), 'order': asdict(order),
                               'output': path.name, 'source': 'Earlier completed document'}
     if summary_total is not None and summary_total != sum(i['pieces'] for r in records.values() for i in r['order']['items']):
@@ -345,13 +350,16 @@ def completed_outputs(folder, history):
                 if key not in output['orders']:
                     continue
                 order = snapshots.get(key)
-                included.append(copy.deepcopy(order) if order else {'order_id': key.split(':', 1)[-1], 'items': [], 'details_available': False})
+                included.append(copy.deepcopy(order) if order else {'order_id': legacy_key(key).split(':', 1)[-1],
+                                'tracking_id': key.split(':TRACKING:', 1)[1] if ':TRACKING:' in key else '',
+                                'items': [], 'details_available': False})
             sources.append({'path': source['path'], 'orders': included,
                             'pieces': sum(i['pieces'] for order in included for i in order['items'])})
         match = re.search(r'_(\d+)\.(?:docx|pdf)$', name, re.I)
         result.append({'filename': name, 'group': output['group'], 'sequence': int(match[1]) if match else 0,
                        'status': output['status'], 'exists': True, 'created': output.get('created', ''),
-                       'order_count': len(output['orders']), 'pieces': sum(i['pieces'] for o in snapshots.values() for i in o['items']),
+                       'order_count': len({legacy_key(key) for key in output['orders']}), 'shipments': len(output['orders']),
+                       'pieces': sum(i['pieces'] for o in snapshots.values() for i in o['items']),
                        'included_sources': sources, 'record_id': output['record_id']})
     platform_order = {'SPX': 0, 'FLASH': 1, 'LAZADA_TIKTOK': 2, 'LAZADA': 3}
     return sorted(result, key=lambda o: (platform_order.get(o['group'], 4), o['sequence'], o['filename']))
@@ -376,6 +384,9 @@ def available_order_outputs(folder, history):
         for key, fingerprint in output.get('order_fingerprints', {}).items():
             if key not in output.get('superseded_orders', []):
                 available[(key, fingerprint)].append(name)
+                resolved = output_key(output, key)
+                if resolved != key:
+                    available[(resolved, fingerprint)].append(name)
     return available
 
 
@@ -407,11 +418,13 @@ def forget_deleted_outputs(folder, history):
 
 
 def batch_details(batch, old=None):
-    parts = [f'{batch.platform} | {len(batch.orders)} orders | {batch.pieces} pieces', '']
+    count = len({order.order_id for order in batch.orders})
+    shipments = f' | {len(batch.orders)} shipments' if count != len(batch.orders) else ''
+    parts = [f'{batch.platform} | {count} orders{shipments} | {batch.pieces} pieces', '']
     if old:
         parts.extend(['PREVIOUSLY RECORDED', old, '', 'CURRENT PDF', ''])
     for order in batch.orders:
-        parts.append(f'Order {order.order_id}')
+        parts.append(f'Order {key_label(order.key)}')
         for i in order.items:
             parts.append(f'  {i.pieces} pcs | {i.product} | {i.variation}' + (f' | SKU: {i.seller_sku}' if i.seller_sku else ''))
         parts.append('')
@@ -569,11 +582,22 @@ def scan_internal(folder, registry=None):
     history = load_history(folder, batches)
     upgrade_output_links(folder, history)
     forget_deleted_outputs(folder, history)
+    upgrade_tracking_links(history, batches)
     available = available_order_outputs(folder, history)
+    prior = prior_orders(history)
+    unresolved_tracking = unresolved_keys(history)
     occurrences = defaultdict(list)
     for key, batch in batches.items():
         for order in batch.orders:
             occurrences[order.key].append((key, order))
+    lazada_sources = defaultdict(list)
+    for key, batch in batches.items():
+        for order in batch.orders:
+            if order.platform == 'LAZADA':
+                lazada_sources[order.order_id].append((key, order))
+    missing_tracking = {key for values in lazada_sources.values()
+                        if any(order.tracking_id for _, order in values) and any(not order.tracking_id for _, order in values)
+                        for key, _ in values}
     conflicts = {key for values in occurrences.values()
                  if len({order.fingerprint() for _, order in values}) > 1 or
                  conflicting_order_skus([order for _, order in values], registry) or
@@ -586,8 +610,9 @@ def scan_internal(folder, registry=None):
             entries.append(errors[key])
             continue
         batch = batches[key]
+        unit_label = 'shipments' if len({o.order_id for o in batch.orders}) != len(batch.orders) else 'orders'
         source = history['sources'].get(key)
-        prior = history['orders']
+        tracking_review = any(o.tracking_id and legacy_key(o.key) in unresolved_tracking for o in batch.orders)
         sku_changes = {o.key for o in batch.orders if o.key in prior and
                        conflicting_order_skus([prior[o.key].get('order', {}), o], registry)}
         changed_orders = [o for o in batch.orders if o.key in prior and
@@ -596,7 +621,8 @@ def scan_internal(folder, registry=None):
                      and not prior.get(o.key, {}).get('removed_from_source_in')]
         fresh = [o for o in uncovered if o.key not in seen]
         old_outputs = sorted(name for name, output in history['outputs'].items()
-                             if any(o.key in output['orders'] for o in batch.orders)
+                             if any(o.key in output_keys(output) or (o.tracking_id and legacy_key(o.key) in unresolved_tracking
+                                    and legacy_key(o.key) in output['orders']) for o in batch.orders)
                              or any(s['path'] == key for s in output.get('sources', [])))
         missing_outputs = [name for name in old_outputs if not safe_child(folder / '000 Output', name).is_file()]
         ignored = bool(source and source.get('ignored_changes') and source.get('sha256') == batch.sha256)
@@ -609,16 +635,21 @@ def scan_internal(folder, registry=None):
         old_text = None
         if batch.platform == 'SHOPEE':
             status, message = 'COURIER', 'Choose SPX or FLASH in Courier; Auto found no unique courier label in the filename or folder.'
+        elif key in missing_tracking:
+            status, message = 'ERROR', 'The same Lazada Order Number appears with and without a Tracking ID. Keep the current PDFs with tracking numbers and scan again.'
         elif key in conflicts:
             status, message = 'ERROR', 'Conflicting versions of the same order are present in this dated folder. Keep the correct PDF and scan again.'
-        elif (source and source.get('sha256') != batch.sha256) or (changed_orders and not ignored) or (ignored and changed_orders and missing_outputs):
-            status, message = 'REVIEW', 'File or order details changed. Review the previous and current versions before continuing.'
+        elif tracking_review or (source and source.get('sha256') != batch.sha256) or (changed_orders and not ignored) or (ignored and changed_orders and missing_outputs):
+            status, message = 'REVIEW', ('An earlier Lazada output has no verified Tracking ID. Review its orders and tracking numbers before creating a revision.'
+                                         if tracking_review else 'File or order details changed. Review the previous and current versions before continuing.')
             prior_lines = []
-            keys = set(source.get('order_keys', []) if source else []) | {o.key for o in changed_orders}
+            keys = source_keys(history, key) | {o.key for o in changed_orders}
+            if tracking_review:
+                keys.update(legacy_key(o.key) for o in batch.orders if legacy_key(o.key) in unresolved_tracking)
             for oid in sorted(keys):
                 if oid in prior:
                     saved = prior[oid]
-                    prior_lines.append(f"Order {saved['order']['order_id']} — {saved['output']}")
+                    prior_lines.append(f"Order {key_label(oid)} — {saved['output']}")
                     for item in saved['order']['items']:
                         prior_lines.append(f"  {item['pieces']} pcs | {item['product']} | {item['variation']}" +
                                            (f" | SKU: {item['seller_sku']}" if item.get('seller_sku') else ''))
@@ -626,13 +657,13 @@ def scan_internal(folder, registry=None):
         elif ignored and changed_orders:
             status, message = 'DONE', 'Earlier output kept. Review this changed PDF to generate its current contents.'
         elif fresh and (missing_outputs or any(o.key in prior for o in fresh) or (source and source.get('legacy_missing'))):
-            status, message = 'MISSING', f'Output missing — {len(fresh)} orders without a PDF or Word file; ready to generate again'
+            status, message = 'MISSING', f'Output missing — {len(fresh)} {unit_label} without a PDF or Word file; ready to generate again'
         elif source and source.get('sha256') == batch.sha256 and not uncovered:
             status, message = 'DONE', 'Process again' if format_label else 'Earlier processing recorded — no current output'
         elif fresh:
-            status, message = 'READY', f'{len(fresh)} new orders ready'
+            status, message = 'READY', f'{len(fresh)} new {unit_label} ready'
             skipped = len(batch.orders) - len(fresh)
-            if skipped: message += f'; {skipped} other orders also included if selected'
+            if skipped: message += f'; {skipped} other {unit_label} also included if selected'
         else:
             status, message = 'DUPLICATE', 'Repeated orders — select to generate again'
         if status == 'DUPLICATE' and not uncovered and format_label:
@@ -645,9 +676,11 @@ def scan_internal(folder, registry=None):
         links = '\r\n'.join(('MISSING: ' if name in missing_outputs else 'output document: ') + name for name in old_outputs)
         entries.append({'path': key, 'platform': batch.platform, 'is_shopee': batch.platform in ('SHOPEE', 'SPX', 'FLASH'),
                         'courier': modes.get(key, 'Auto'), 'status': status, 'message': message,
-                        'order_totals': [{'key': o.key, 'pieces': o.pieces} for o in batch.orders],
+                        'order_totals': [{'key': o.key, 'order_id': o.order_id, 'platform': o.platform,
+                                         'tracking_id': o.tracking_id, 'pieces': o.pieces} for o in batch.orders],
                         'output_formats': output_formats,
-                        'details': (links + '\r\n\r\n' if links else '') + batch_details(batch, old_text), 'orders': len(batch.orders),
+                        'details': (links + '\r\n\r\n' if links else '') + batch_details(batch, old_text),
+                        'orders': len({o.order_id for o in batch.orders}), 'shipments': len(batch.orders),
                         'pieces': batch.pieces, 'new_orders': len(fresh) if status == 'READY' else 0,
                         'missing_orders': len(fresh) if status == 'MISSING' else 0,
                         'requires_revision': status == 'REVIEW' or bool(ignored and changed_orders),
@@ -687,9 +720,11 @@ def scan(folder, catalog_path=None):
 
 def repeat_warning(selected, batches, history, output_format):
     selected_keys = {o.key for s in selected for o in batches[s['path'].replace('\\', '/')].orders}
-    recorded = set(history['orders'])
-    for source in history['sources'].values():
-        recorded.update(source.get('order_keys', []))
+    recorded = set(prior_orders(history))
+    for path in history['sources']:
+        recorded.update(source_keys(history, path))
+    unresolved = unresolved_keys(history)
+    recorded.update(key for key in selected_keys if legacy_key(key) in unresolved)
     occurrences = defaultdict(int)
     for batch in batches.values():
         for order in batch.orders:
@@ -718,6 +753,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
         recover(out)
         entries, batches, history = scan_internal(folder, registry)
         from names import encounter, apply_names
+        prior = prior_orders(history)
         entry_map = {e['path']: e for e in entries}
         chosen, seen = [], set()
         modes, skipped = {}, {}
@@ -742,7 +778,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
             skipped[key] = []
             for o in batch.orders:
                 if o.key in seen or preferred.get(o.key) != key:
-                    skipped[key].append(o.order_id)
+                    skipped[key].append(key_label(o.key))
                 else:
                     orders.append(o)
                     seen.add(o.key)
@@ -761,7 +797,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
             for key, batch in chosen:
                 remaining = []
                 for order in batch.orders:
-                    saved = history['orders'].get(order.key, {}).get('order', {})
+                    saved = prior.get(order.key, {}).get('order', {})
                     if available.get((order.key, order.fingerprint())) and not conflicting_order_skus([saved, order], registry):
                         skipped_existing.add(order.key)
                     else:
@@ -784,7 +820,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
         try:
             for (group, mode), values in sorted(grouped.items()):
                 if mode == 'standard':
-                    mode = 'regenerated' if any(entry_map[key]['status'] == 'MISSING' or any(o.key in history['orders'] for o in batch.orders)
+                    mode = 'regenerated' if any(entry_map[key]['status'] == 'MISSING' or any(o.key in prior for o in batch.orders)
                                                 for key, batch in values) else 'new'
                 filename = next_output_filename(out, group, folder.name, reserved, output_format)
                 reserved.add(filename)
@@ -835,18 +871,24 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                 removed = set()
                 def record_replacements(order_key):
                     for old_name, old in new_history['outputs'].items():
-                        if order_key in old['orders'] and (mode == 'revision' or
-                                (plan['group'] == 'LAZADA_TIKTOK' and old['group'] == 'LAZADA')):
-                            replaced[old_name].add(order_key)
+                        for old_key in old['orders']:
+                            resolved = output_key(old, old_key)
+                            unresolved_match = (mode == 'revision' and old_key == resolved
+                                                and old_key == legacy_key(order_key))
+                            if (resolved == order_key or unresolved_match) and (mode == 'revision' or
+                                    (plan['group'] == 'LAZADA_TIKTOK' and old['group'] == 'LAZADA')):
+                                replaced[old_name].add(old_key)
                 for key, batch in values:
                     if mode == 'revision':
-                        previous_keys = set(history['sources'].get(key, {}).get('order_keys', []))
+                        previous_keys = source_keys(history, key)
                         removed.update(previous_keys - {o.key for o in batches[key].orders})
                         for removed_key in previous_keys - {o.key for o in batches[key].orders}:
+                            record_replacements(removed_key)
+                            if removed_key not in new_history['orders'] and removed_key in prior:
+                                new_history['orders'][removed_key] = copy.deepcopy(prior[removed_key])
                             if removed_key in new_history['orders']:
-                                prior = new_history['orders'][removed_key]
-                                record_replacements(removed_key)
-                                prior['removed_from_source_in'] = name
+                                previous_order = new_history['orders'][removed_key]
+                                previous_order['removed_from_source_in'] = name
                     for o in batch.orders:
                         record_replacements(o.key)
                         new_history['orders'][o.key] = {'fingerprint': o.fingerprint(), 'order': asdict(o), 'output': name,
@@ -863,7 +905,7 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                         old['superseded_orders'] = sorted(all_replaced)
                         old['status'] = 'superseded' if set(old['orders']) <= all_replaced else 'partially superseded'
                         old.setdefault('replacements', []).append(name)
-                        lines.append(f'{old_name}: {old["status"]}; replacement {name}; affected orders ' + ', '.join(k.split(':',1)[1] for k in sorted(replaced_keys)))
+                        lines.append(f'{old_name}: {old["status"]}; replacement {name}; affected orders ' + ', '.join(key_label(k) for k in sorted(replaced_keys)))
                 fingerprints = {o.key: o.fingerprint() for _, b in values for o in b.orders}
                 sources = []
                 for selection in selected:
@@ -880,15 +922,19 @@ def generate(folder, selected, verifier=verify_word, catalog_path=None, output_f
                                                'name_catalog_revision': catalog['revision'],
                                                'display_order_snapshots': {o.key: asdict(o) for b in plan['display_batches'] for o in b.orders},
                                                'order_snapshots': {o.key: asdict(o) for _, b in values for o in b.orders}}
+                order_count = len({legacy_key(key) for key in keys})
+                shipment_label = f' | {len(keys)} shipments' if order_count != len(keys) else ''
                 lines += ['', name, f'Generation record: {record_id}', f'Status: Completed and checked ({mode})',
-                          f'{len(keys)} orders | {sum(len(o.items) for _,b in values for o in b.orders)} product rows | '
+                          f'{order_count} orders{shipment_label} | {sum(len(o.items) for _,b in values for o in b.orders)} product rows | '
                           f'{sum(b.pieces for _,b in values)} pieces | {page_counts.get(name)} A4 pages', 'Source PDFs:']
                 if removed:
-                    lines.append('    Removed from revised source (retained in history for duplicate prevention): ' + ', '.join(k.split(':',1)[1] for k in sorted(removed)))
+                    lines.append('    Removed from revised source (retained in history for duplicate prevention): ' + ', '.join(key_label(k) for k in sorted(removed)))
                 for source in sources:
                     key = source['path']
-                    lines.append(f'  - {key} | {len(source["order_keys"])} linked orders | SHA256 {source["sha256"]}')
-                    lines.append('    Order IDs: ' + ', '.join(k.split(':', 1)[1] for k in source['order_keys']))
+                    count = len(source['order_keys'])
+                    label = 'shipments' if len({legacy_key(k) for k in source['order_keys']}) != count else 'orders'
+                    lines.append(f'  - {key} | {count} linked {label} | SHA256 {source["sha256"]}')
+                    lines.append('    Order IDs: ' + ', '.join(key_label(k) for k in source['order_keys']))
                     if skipped[key]: lines.append('    Shared orders printed once in this run: ' + ', '.join(skipped[key]))
                 files.append({'target': name, 'stage': plan['dest'].relative_to(out).as_posix(), 'sha256': file_hash(plan['dest'])})
             for selection in selected:

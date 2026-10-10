@@ -44,14 +44,22 @@ class PackingTests(unittest.TestCase):
         return [{'path': e['path'], 'sha256': e['sha256']} for e in self.entries() if e['status'] in statuses]
 
     def test_every_approved_order_matches_products_variations_and_quantities(self):
+        from lazada_history import legacy_key
         expected = {}
         for group in ['SPX','FLASH','LAZADA_TIKTOK']:
             expected.update(engine.read_completed_doc(ROOT/'20260926'/'000 Output'/f'{group}_Packing_Checklist_2026-09-26_1.docx', group))
-        actual = {}
+        actual, tracking_keys = {}, set()
         for path in (ROOT/'20260926').rglob('*.pdf'):
             for order in parse_pdf(path).orders:
-                self.assertNotIn(order.key, actual)
-                actual[order.key] = order
+                self.assertNotIn(order.key, tracking_keys)
+                tracking_keys.add(order.key)
+                if order.platform == 'LAZADA':
+                    self.assertTrue(order.tracking_id, str(path))
+                # Approved pre-tracking documents identify these unsplit fixture
+                # orders by number only; never collapse multiple current parcels.
+                key = legacy_key(order.key)
+                self.assertNotIn(key, actual)
+                actual[key] = order
         self.assertEqual(set(expected), set(actual))
         self.assertEqual(len(actual),139)
         self.assertEqual(sum(o.pieces for o in actual.values()),318)
@@ -75,13 +83,25 @@ class PackingTests(unittest.TestCase):
         shutil.copytree(ROOT/'20260926',self.folder,dirs_exist_ok=True)
         log = self.folder/'000 Output'/engine.LOG
         before = file_hash(self.folder/'000 Output'/'Processed_Files.txt')
+        out = self.folder/'000 Output'
+        documents_before = {p.name: file_hash(p) for p in out.iterdir() if p.suffix.lower() in ('.docx', '.pdf')}
         entries = self.entries()
         self.assertEqual(len(entries),9)
-        self.assertTrue(all(e['status']=='DONE' for e in entries))
+        lazada = [e for e in entries if e['platform'] == 'LAZADA']
+        self.assertTrue(lazada)
+        self.assertTrue(all(e['status'] == 'REVIEW' and e['requires_revision'] for e in lazada))
+        self.assertTrue(all('no verified Tracking ID' in e['message'] for e in lazada))
+        self.assertTrue(all(e['status'] == 'DONE' for e in entries if e['platform'] != 'LAZADA'))
+        # The old text log has no source hashes: identical item contents alone
+        # cannot prove which tracking number an earlier Lazada table covered.
+        with self.assertRaisesRegex(PackingError, 'explicit revision review'):
+            engine.generate(self.folder, [{'path': e['path'], 'sha256': e['sha256']} for e in lazada], verifier=fake_layout)
         self.assertEqual(before,file_hash(log))
         history=json.loads((self.folder/'000 Output'/engine.HISTORY).read_text())
         self.assertEqual(len(history['outputs']),3)
         self.assertTrue(all(o['sources'] and o['order_fingerprints'] for o in history['outputs'].values()))
+        self.assertTrue(all(not o.get('tracking_order_keys') for o in history['outputs'].values()))
+        self.assertEqual(documents_before, {p.name: file_hash(p) for p in out.iterdir() if p.suffix.lower() in ('.docx', '.pdf')})
 
     def test_three_output_groups_and_later_suffix_without_overwrite(self):
         self.copy_source('20260926_SPX_PL_1.pdf')

@@ -122,7 +122,7 @@ def add_comment_row(table, row_proto, comment):
         cell._tc.get_or_add_tcPr().find(qn('w:shd')).set(qn('w:fill'), 'FFFFFF')
 
 
-def set_order_header(paragraph, platform, order_id):
+def set_order_header(paragraph, platform, order_id, tracking_id=''):
     """Keep all handwriting fields in the existing merged order-header cell."""
     paragraph.clear()
     tabs = paragraph.paragraph_format.tab_stops
@@ -132,6 +132,8 @@ def set_order_header(paragraph, platform, order_id):
     label = 'Order Number' if platform == 'LAZADA' else 'Order ID'
     fields = [f'{label}: {order_id}', '\tEmployee:__________________',
               '\tNumber __________', '\tTime __________']
+    if platform == 'LAZADA' and tracking_id:
+        fields.append(f'\nTracking Number: {tracking_id}')
     for index, text in enumerate(fields):
         run = paragraph.add_run(text)
         run.font.name = 'Arial'
@@ -161,8 +163,12 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
     p = Paragraph(title, d._body)
     set_text(p, f'{display_group} Packing List {date_obj.day} {date_obj:%B %Y}')
     append(title)
+    shipment_count = sum(len(b.orders) for b in batches)
+    order_count = len({(o.platform, o.order_id) for b in batches for o in b.orders})
+    split_shipments = group == 'LAZADA_TIKTOK' and order_count < shipment_count
     p = Paragraph(intro, d._body)
-    intro_text = "One table is one order. Write the employee name, waybill number, and packing completion time in its header."
+    intro_text = (f"One table is one {'shipment' if split_shipments else 'order'}. "
+                  'Write the employee name, waybill number, and packing completion time in its header.')
     if group == 'LAZADA_TIKTOK':
         intro_text += '  — = no variation provided.'
     if revision:
@@ -171,7 +177,9 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
     append(intro)
     total_heading = deepcopy(heading)
     total_paragraph = Paragraph(total_heading, d._body)
-    set_text(total_paragraph, f"Total orders: {sum(len(b.orders) for b in batches)}")
+    total_text = (f'Total orders: {order_count} | Shipments: {shipment_count}' if split_shipments
+                  else f'Total orders: {shipment_count}')
+    set_text(total_paragraph, total_text)
     total_paragraph.paragraph_format.keep_with_next = True
     append(total_heading)
     for batch_no, batch in enumerate(batches, 1):
@@ -198,7 +206,7 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
                     for cell, width in zip(row.cells, widths):
                         cell.width = Twips(width)
             header = table.cell(0, 0).paragraphs[0]
-            set_order_header(header, order.platform, order.order_id)
+            set_order_header(header, order.platform, order.order_id, order.tracking_id)
             row_proto = deepcopy(table.rows[2]._tr)
             tbl.remove(table.rows[2]._tr)
             for item_no, item in enumerate(order.items):
@@ -223,8 +231,10 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
             append(deepcopy(spacer))
     summary_rows = picking_rows(batches)
     summary = Document(ASSETS / ('summary_blue.docx' if group == 'LAZADA_TIKTOK' else 'summary_orange.docx'))
+    summary_count = (f'{order_count} orders  |  {shipment_count} shipments' if split_shipments
+                     else f'{shipment_count} orders')
     summary_texts = [f'{display_group} Product Picking Summary',
-                     f'{date_obj.day} {date_obj:%B %Y}  |  {sum(len(b.orders) for b in batches)} orders  |  {sum(b.pieces for b in batches)} pieces',
+                     f'{date_obj.day} {date_obj:%B %Y}  |  {summary_count}  |  {sum(b.pieces for b in batches)} pieces',
                      summary.paragraphs[2].text]
     for proto, text in zip(summary.paragraphs, summary_texts):
         node = deepcopy(proto._p)
@@ -286,6 +296,8 @@ def build_document(batches: list[Batch], group: str, date: str, destination: Pat
             raise PackingError(f'Document verification failed for buyer comment on order {order.order_id}.')
         header = table.cell(0, 0).text
         expected_header = f"{'Order Number' if order.platform == 'LAZADA' else 'Order ID'}: {order.order_id}\tEmployee:__________________\tNumber __________\tTime __________"
+        if order.platform == 'LAZADA' and order.tracking_id:
+            expected_header += f'\nTracking Number: {order.tracking_id}'
         if rows != expected or header != expected_header:
             raise PackingError(f'Document verification failed for order {order.order_id}.')
     got = [(r.cells[1].text, r.cells[2].text, int(r.cells[3].text)) for r in actual.tables[-1].rows[1:-1]]

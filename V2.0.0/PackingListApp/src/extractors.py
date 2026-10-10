@@ -55,10 +55,13 @@ class Order:
     order_id: str
     items: list[Item] = field(default_factory=list)
     buyer_comment: str = ''
+    tracking_id: str = ''
 
     @property
     def key(self):
-        return f"{'SHOPEE' if self.platform in ('SPX', 'FLASH') else self.platform}:{self.order_id}"
+        key = f"{'SHOPEE' if self.platform in ('SPX', 'FLASH') else self.platform}:{self.order_id}"
+        # Lazada can split one order across several independently packed parcels.
+        return f'{key}:TRACKING:{self.tracking_id}' if self.platform == 'LAZADA' and self.tracking_id else key
 
     @property
     def pieces(self):
@@ -205,6 +208,12 @@ def lazada_page(page, page_num):
     ids = re.findall(r'Order\s+Number\s*[:：]\s*(\d+)', text)
     if len(ids) != 1:
         raise PackingError(f'Page {page_num}: expected one Lazada Order Number.')
+    tracking_labels = re.findall(r'Tracking\s+(?:ID|Number|No\.?)[ \t]*[:：][ \t]*([^\r\n]*)', text, re.I)
+    tracking_id = ''
+    if re.search(r'Tracking\s+(?:ID|Number|No)\b', text, re.I):
+        if len(tracking_labels) != 1 or not re.fullmatch(r'[A-Z0-9][A-Z0-9-]*', tracking_labels[0].strip(), re.I):
+            raise PackingError(f'Order {ids[0]}: the Lazada Tracking ID could not be read safely.')
+        tracking_id = tracking_labels[0].strip().upper()
     matches = []
     for table in page.extract_tables():
         if table and len(table[0]) == 4 and [clean(c).lower() for c in table[0]] == [
@@ -223,7 +232,7 @@ def lazada_page(page, page_num):
                           seller_sku=normalize_sku(seller_sku), raw_seller_sku=seller_sku or ''))
     if not items:
         raise PackingError(f'Order {ids[0]} has no readable products.')
-    return Order('LAZADA', ids[0], items)
+    return Order('LAZADA', ids[0], items, tracking_id=tracking_id)
 
 
 def tiktok_page(page, page_num):
@@ -359,7 +368,8 @@ def parse_pdf(path: str | Path, carrier: str | None = None, allow_unassigned=Fal
     combined = OrderedDict()
     for order in orders:
         if order.key in combined:
-            raise PackingError(f'Order {order.order_id} appears more than once in this PDF. Review for duplicate labels or continued pages.')
+            identity = f'Order {order.order_id}' + (f', Tracking ID {order.tracking_id}' if order.tracking_id else '')
+            raise PackingError(f'{identity} appears more than once in this PDF. Review for duplicate labels or continued pages.')
         if platform == 'LAZADA':
             grouped = OrderedDict()
             for item in order.items:

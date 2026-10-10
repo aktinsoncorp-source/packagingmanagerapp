@@ -41,17 +41,24 @@ def can_select(entry, revisions=()):
 
 def selection_counts(entries, checked, revisions=()):
     """Count the same platform/order key once, with reviewed revisions first."""
-    result, seen = {}, set()
+    result, seen, seen_orders = {}, set(), set()
     for entry in sorted(entries, key=lambda row: row["path"] not in revisions):
         if entry["path"] not in checked or not can_select(entry, revisions):
             continue
         platform = entry.get("platform", "")
-        values = result.setdefault(platform, {"pdfs": 0, "orders": 0})
+        values = result.setdefault(platform, {"pdfs": 0, "orders": 0, "shipments": 0})
         values["pdfs"] += 1
         for order in entry.get("order_totals", []):
             if order["key"] not in seen:
-                values["orders"] += 1
+                values["shipments"] += 1
+                order_key = order["key"].split(":TRACKING:", 1)[0] if platform == "LAZADA" else order["key"]
+                if order_key not in seen_orders:
+                    values["orders"] += 1
+                    seen_orders.add(order_key)
                 seen.add(order["key"])
+    for values in result.values():
+        if values["shipments"] == values["orders"]:
+            values.pop("shipments")
     return result
 
 
@@ -690,7 +697,8 @@ class PackingApp(tk.Tk):
         self.row_entries.clear()
         issues = sum(row.get("status") in ("REVIEW", "ERROR", "COURIER") for row in self.entries)
         fresh = sum(row.get("new_orders", 0) for row in self.entries)
-        text = f"Packing PDFs · {fresh} new orders"
+        unit = "shipments" if any(row.get("shipments", row.get("orders", 0)) > row.get("orders", 0) for row in self.entries) else "orders"
+        text = f"Packing PDFs · {fresh} new {unit}"
         if issues:
             text += f" · {issues} need attention"
         self.summary_var.set(text)
@@ -775,8 +783,11 @@ class PackingApp(tk.Tk):
         counts = selection_counts(self.entries, self.checked, self.revisions)
         pdfs = sum(value["pdfs"] for value in counts.values())
         orders = sum(value["orders"] for value in counts.values())
-        self.totals_var.set(f"Selected: {pdfs} PDFs   |   {orders} distinct orders")
-        self.platform_totals_var.set("     ".join(f'{platform}: {counts[platform]["pdfs"]} PDFs / {counts[platform]["orders"]} orders' for platform in PLATFORMS if platform in counts) or "Tick Use beside the PDFs you want to generate.")
+        shipments = sum(value.get("shipments", value["orders"]) for value in counts.values())
+        self.totals_var.set(f"Selected: {pdfs} PDFs   |   {orders} distinct orders" + (f" / {shipments} shipments" if shipments != orders else ""))
+        self.platform_totals_var.set("     ".join(f'{platform}: {counts[platform]["pdfs"]} PDFs / {counts[platform]["orders"]} orders' +
+            (f' / {counts[platform]["shipments"]} shipments' if "shipments" in counts[platform] else "")
+            for platform in PLATFORMS if platform in counts) or "Tick Use beside the PDFs you want to generate.")
         if getattr(self, "_compact", False):
             self.generate_hint.set("A4 PDF · 000 Output" if pdfs else "Tick Use beside a PDF.")
         else:
@@ -1055,14 +1066,21 @@ class PackingApp(tk.Tk):
                 if group not in groups:
                     groups[group] = tree.insert("", "end", text="Lazada + TikTok" if group == "LAZADA_TIKTOK" else group, open=True)
                 suffix = "" if output.get("status") == "active" else f'  [{output.get("status", "")}]'
-                document = tree.insert(groups[group], "end", text=f'{output["filename"]}  |  {output.get("order_count", 0)} orders{suffix}')
+                count = output.get("order_count", 0)
+                shipments = output.get("shipments", count)
+                shipment_label = f' / {shipments} shipments' if shipments != count else ""
+                document = tree.insert(groups[group], "end", text=f'{output["filename"]}  |  {count} orders{shipment_label}{suffix}')
                 links[document] = output, None
                 for source in output.get("included_sources", []):
-                    node = tree.insert(document, "end", text=f'{source["path"]}  |  {len(source.get("orders", []))} orders')
+                    source_orders = source.get("orders", [])
+                    count = len({(o.get("platform"), o.get("order_id")) for o in source_orders})
+                    shipment_label = f' / {len(source_orders)} shipments' if len(source_orders) != count else ""
+                    node = tree.insert(document, "end", text=f'{source["path"]}  |  {count} orders{shipment_label}')
                     links[node] = output, source["path"]
                     for order in source.get("orders", []):
                         label = "Order Number" if order.get("platform") == "LAZADA" else "Order ID"
-                        item = tree.insert(node, "end", text=f'{label}: {order.get("order_id", "")}')
+                        tracking = f' | Tracking: {order["tracking_id"]}' if order.get("tracking_id") else ""
+                        item = tree.insert(node, "end", text=f'{label}: {order.get("order_id", "")}{tracking}')
                         links[item] = output, source["path"]
                         for product in order.get("items", []):
                             row = tree.insert(item, "end", text=f'{product.get("pieces", 0)} pcs | {product.get("product", "")} | {product.get("variation", "")}')

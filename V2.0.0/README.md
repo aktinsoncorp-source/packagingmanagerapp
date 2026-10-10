@@ -14,6 +14,8 @@ Shopee is the master SKU source. Approved earlier Lazada SKUs remain linked so o
 
 Flash packing headers and picking-summary headers use pastel yellow. SPX remains orange; Lazada and TikTok share blue outputs. All outputs retain A4 paper, whole-order tables, handwritten staff fields and quantity picking summaries.
 
+Lazada shipments use **Order Number + Tracking Number**. One order with different tracking numbers prints as separate shipment tables, each showing its tracking number. Counts distinguish orders from shipments, and sales exports include every shipment's quantities once. Earlier outputs remain covered when unchanged source evidence proves their tracking number; uncertain earlier records require review.
+
 ## Folders
 
 - `PackingListApp/src`: Python application and engine source.

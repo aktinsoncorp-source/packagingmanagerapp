@@ -10,6 +10,7 @@ Start with `../Start Packing List Manager.cmd`, or `python src/app.py`. V2 uses 
 - `src/sku_registry.py`: platform-scoped seller aliases and Shopee-authoritative catalog evidence.
 - `src/extractors.py`: PDF parsing, raw seller SKUs, continuation validation and unchanged source fingerprints.
 - `src/engine.py`: date/history operations, repeat decisions, PDF-only generation and immutable audit snapshots.
+- `src/lazada_history.py`: verified tracking links for earlier Lazada outputs without altering their audit snapshots.
 - `src/documents.py`: A4 layouts, platform colors, prices, buyer comments and picking summaries.
 - `src/sales.py`: full-date quantity Excel snapshot, with source prices when available.
 - `src/assets/verify_word.ps1`: actual Word pagination verification and PDF export.

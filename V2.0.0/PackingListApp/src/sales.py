@@ -15,7 +15,7 @@ SUMMARY_HEADERS = ['date', 'product_name', 'variation', 'quantity', 'order_count
                    'shopee_quantity', 'lazada_quantity', 'tiktok_quantity', 'unit_price', 'price_status']
 DETAIL_HEADERS = ['date', 'platform', 'order_id', 'line_number', 'original_product_name',
                   'original_variation', 'product_name', 'variation', 'quantity',
-                  'source_pdf', 'source_sha256', 'order_fingerprint', 'unit_price']
+                  'source_pdf', 'source_sha256', 'order_fingerprint', 'unit_price', 'tracking_id']
 
 
 def export_sales(folder, catalog_path):
@@ -42,7 +42,7 @@ def export_sales(folder, catalog_path):
         keys = sorted(batches)
         named = dict(zip(keys, apply_names([batches[k] for k in keys], catalog, registry=registry)))
         preferred = preferred_order_sources({key: batches[key] for key in keys}, registry)
-        seen, details, totals = {}, [], {}
+        seen, distinct_orders, details, totals = {}, set(), [], {}
         day = datetime.strptime(folder.name, '%Y%m%d').strftime('%Y-%m-%d')
         for key in keys:
             batch = batches[key]
@@ -56,17 +56,20 @@ def export_sales(folder, catalog_path):
                 if preferred[original.key] != key:
                     continue
                 platform = 'SHOPEE' if original.platform in ('SPX', 'FLASH', 'SHOPEE') else original.platform
+                order_key = (platform, original.order_id)
+                distinct_orders.add(order_key)
                 for line, (raw, item) in enumerate(zip(original.items, order.items), 1):
                     pair = (item.product, item.variation)
                     total = totals.setdefault(pair, {'quantity': 0, 'orders': set(), 'platforms': defaultdict(int), 'prices': set(), 'priced_quantity': 0})
                     total['quantity'] += item.pieces
-                    total['orders'].add(original.key)
+                    total['orders'].add(order_key)
                     total['platforms'][platform] += item.pieces
                     if raw.unit_price is not None:
                         total['prices'].add(Decimal(raw.unit_price))
                         total['priced_quantity'] += item.pieces
                     details.append([day, platform, str(original.order_id), line, raw.product, raw.variation,
-                                    item.product, item.variation, item.pieces, key, batch.sha256, fingerprint, float(raw.unit_price) if raw.unit_price is not None else None])
+                                    item.product, item.variation, item.pieces, key, batch.sha256, fingerprint,
+                                    float(raw.unit_price) if raw.unit_price is not None else None, original.tracking_id])
         if not details:
             raise PackingError('No readable packing orders to export for this date.')
         def price_status(total):
@@ -82,7 +85,7 @@ def export_sales(folder, catalog_path):
         if quantity != sum(row[8] for row in details):
             raise PackingError('Item sales quantities do not reconcile with order details.')
         info = [
-            ['date', day], ['total_orders', len(seen)], ['total_quantity', quantity],
+            ['date', day], ['total_orders', len(distinct_orders)], ['total_shipments', len(seen)], ['total_quantity', quantity],
             ['item_variation_pairs', len(summary)], ['source_pdf_count', len(batches)],
             ['name_catalog_revision', catalog['revision']],
             ['exported_at', datetime.now().astimezone().isoformat(timespec='seconds')],
@@ -91,7 +94,7 @@ def export_sales(folder, catalog_path):
             ['price_basis', 'Unit prices are copied from source PDFs, not inferred. Blank means unavailable, mixed or partial; see Order Items for exact row prices. Currency is not assumed when absent from the source.'],
             ['date_basis', 'Selected source-folder date; not an inferred order/payment date.'],
             ['names', 'Current Define Name alternatives; blank fields retain original names. Original fields remain in Order Items.'],
-            ['duplicates', 'Each platform/order ID counted once. SHOPEE combines SPX and FLASH. Matching source copies and reprints do not add sales.'],
+            ['duplicates', 'Lazada quantities include each distinct Order Number + Tracking Number shipment once. Other platforms use order ID; SHOPEE combines SPX and FLASH. Matching source copies and reprints do not add sales.'],
             ['erp_import', 'This is a full-date snapshot. Replace the prior snapshot for that date; do not append repeated exports.'],
             ['order_counts', 'Item order_count is distinct per item; do not add these counts for the daily total.'],
         ]
@@ -129,7 +132,7 @@ def export_sales(folder, catalog_path):
             ws.print_title_rows = '1:1'
             return ws
         sheet('Item Sales', SUMMARY_HEADERS, summary, [14, 52, 34, 14, 14, 20, 20, 20, 14, 36], 'ItemSales')
-        sheet('Order Items', DETAIL_HEADERS, details, [14, 14, 24, 14, 52, 34, 52, 34, 14, 52, 68, 68, 14], 'OrderItems')
+        sheet('Order Items', DETAIL_HEADERS, details, [14, 14, 24, 14, 52, 34, 52, 34, 14, 52, 68, 68, 14, 26], 'OrderItems')
         sheet('Export Info', ['field', 'value'], info, [28, 110], 'ExportInfo')
         prefix = f'{day}_Item_Sales_'
         numbers = [int(m[1]) for p in out.iterdir()
@@ -157,5 +160,6 @@ def export_sales(folder, catalog_path):
             wb.close()
             temp.unlink(missing_ok=True)
         return {'ok': True, 'path': str(target), 'filename': target.name,
-                'orders': len(seen), 'quantity': quantity, 'items': len(summary),
-                'message': f'Exported {len(summary)} items / variations, {quantity} units from {len(seen)} orders.'}
+                'orders': len(distinct_orders), 'shipments': len(seen), 'quantity': quantity, 'items': len(summary),
+                'message': f'Exported {len(summary)} items / variations, {quantity} units from {len(distinct_orders)} orders' +
+                           (f' / {len(seen)} shipments.' if len(seen) != len(distinct_orders) else '.')}
