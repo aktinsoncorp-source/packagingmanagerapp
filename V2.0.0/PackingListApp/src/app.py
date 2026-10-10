@@ -20,11 +20,15 @@ from tkinter import font as tkfont
 
 VERSION = "2.0.0"
 DATA_DIR = Path(__file__).resolve().parents[2] / "Packing List Manager"
-BG = "#edf2f7"
-INK = "#162334"
-MUTED = "#435269"
-BLUE = "#19579d"
-LINE = "#7b8ba0"
+BG = "#e9e3d8"
+INK = "#292c31"
+MUTED = "#555a61"
+BLUE = "#4c4f54"
+LINE = "#777b80"
+PANEL = "#f8f4ec"
+ROW = "#fffdf7"
+HEADER = "#4c4f54"
+SELECTED = "#cbd0d5"
 PLATFORMS = ("SPX", "FLASH", "LAZADA", "TIKTOK", "SHOPEE")
 
 
@@ -77,34 +81,51 @@ def _single_instance():
 
 def configure_styles(root):
     root.option_add("*TCombobox*Listbox.font", "{Segoe UI} 11")
+    root.option_add("*TCombobox*Listbox.background", ROW)
+    root.option_add("*TCombobox*Listbox.foreground", INK)
+    root.option_add("*TCombobox*Listbox.selectBackground", SELECTED)
+    root.option_add("*TCombobox*Listbox.selectForeground", INK)
     style = ttk.Style(root)
     style.theme_use("clam")
     style.configure(".", font=("Segoe UI", 11), foreground=INK, background=BG)
     style.configure("App.TFrame", background=BG)
-    style.configure("Card.TFrame", background="white", bordercolor=LINE, borderwidth=1, relief="solid")
+    style.configure("Card.TFrame", background=PANEL, bordercolor=LINE, borderwidth=1, relief="solid")
     style.configure("TLabel", background=BG)
-    style.configure("Card.TLabel", background="white")
+    style.configure("Card.TLabel", background=PANEL)
     style.configure("Muted.TLabel", foreground=MUTED)
-    style.configure("CardMuted.TLabel", background="white", foreground=MUTED, font=("Segoe UI", 10))
+    style.configure("CardMuted.TLabel", background=PANEL, foreground=MUTED, font=("Segoe UI", 10))
     style.configure("Title.TLabel", font=("Segoe UI", 23, "bold"))
     style.configure("Section.TLabel", font=("Segoe UI", 13, "bold"))
-    style.configure("CardHeading.TLabel", background="white", font=("Segoe UI", 11, "bold"))
-    style.configure("TButton", padding=(12, 9), background="white", bordercolor=LINE,
-                    lightcolor="white", darkcolor="white", focuscolor=BLUE, borderwidth=1)
-    style.map("TButton", background=[("active", "#deebfb"), ("disabled", "#e5eaf1")],
-              foreground=[("disabled", "#67758a")], bordercolor=[("focus", BLUE)])
+    style.configure("CardHeading.TLabel", background=PANEL, font=("Segoe UI", 11, "bold"))
+    style.configure("TButton", padding=(12, 9), background=PANEL, bordercolor=LINE,
+                    lightcolor=PANEL, darkcolor=PANEL, focuscolor=INK, borderwidth=1)
+    style.map("TButton", background=[("disabled", "#ded9d0"), ("active", "#ded6c7")],
+              foreground=[("disabled", "#666a70")], bordercolor=[("focus", INK)])
     style.configure("Primary.TButton", background=BLUE, foreground="white", bordercolor=BLUE,
                     font=("Segoe UI", 11, "bold"), padding=(16, 13), lightcolor=BLUE, darkcolor=BLUE)
-    style.map("Primary.TButton", background=[("disabled", "#dfe7f1"), ("active", "#14477f")],
-              foreground=[("disabled", "#6b7788"), ("!disabled", "white")])
-    style.configure("Treeview", background="white", fieldbackground="white", rowheight=40,
-                    borderwidth=1, bordercolor=LINE, font=("Segoe UI", 11), foreground=INK, relief="solid")
-    style.configure("Treeview.Heading", background="#d5dfeb", foreground=INK,
-                    font=("Segoe UI", 11, "bold"), padding=(7, 10), relief="raised", bordercolor=LINE)
-    style.map("Treeview", background=[("selected", "#c5dbf7")], foreground=[("selected", INK)])
-    style.map("Treeview.Heading", background=[("active", "#c5d5e8")])
-    style.configure("TEntry", padding=(5, 5), fieldbackground="white", font=("Segoe UI", 11))
-    style.configure("TCombobox", padding=(4, 5))
+    style.map("Primary.TButton", background=[("disabled", "#ded9d0"), ("active", "#363a40")],
+              foreground=[("disabled", "#666a70"), ("!disabled", "white")])
+    style.configure("Treeview", background=ROW, fieldbackground=ROW, rowheight=40,
+                    borderwidth=1, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 11), foreground=INK, relief="solid")
+    style.configure("Treeview.Heading", background=HEADER, foreground="#fffaf0",
+                    font=("Segoe UI", 11, "bold"), padding=(7, 10), relief="raised", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+    style.map("Treeview", background=[("selected", SELECTED)], foreground=[("selected", INK)])
+    style.map("Treeview.Heading", background=[("active", "#363a40")])
+    style.configure("TEntry", padding=(5, 5), fieldbackground=ROW, foreground=INK, insertcolor=INK,
+                    bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 11))
+    style.map("TEntry", fieldbackground=[("readonly", ROW), ("disabled", "#ded9d0")],
+              foreground=[("disabled", "#666a70")], bordercolor=[("focus", INK)])
+    style.configure("TCombobox", padding=(4, 5), fieldbackground=ROW, background=PANEL, foreground=INK,
+                    arrowcolor=INK, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+    style.map("TCombobox", fieldbackground=[("readonly", ROW)], foreground=[("readonly", INK)],
+              selectbackground=[("readonly", SELECTED)], selectforeground=[("readonly", INK)])
+    style.configure("TCheckbutton", background=BG, foreground=INK)
+    style.map("TCheckbutton", background=[("active", BG)], foreground=[("disabled", "#666a70")])
+    style.configure("TScrollbar", background="#b0aaa0", troughcolor=PANEL, arrowcolor=INK,
+                    bordercolor=LINE, lightcolor="#b0aaa0", darkcolor="#b0aaa0")
+    style.map("TScrollbar", background=[("active", "#8c8881")])
+    style.configure("Loading.Horizontal.TProgressbar", background=BLUE, troughcolor=PANEL,
+                    bordercolor=LINE, lightcolor=BLUE, darkcolor=BLUE, thickness=12)
     return style
 
 
@@ -137,11 +158,11 @@ class RepeatWarning(tk.Toplevel):
         area.pack(fill="x", padx=60)
         self.no_button = tk.Button(area, text="No", command=lambda: self.choose("skip"),
                                    font=("Segoe UI", 12, "bold"), background=BLUE, foreground="white",
-                                   activebackground="#14477f", activeforeground="white", relief="flat",
+                                   activebackground="#363a40", activeforeground="white", relief="flat",
                                    height=2, cursor="hand2", default="active", bd=0)
         self.no_button.pack(fill="x")
         self.continue_link = tk.Label(area, text="Continue to Generate the Repeated Orders",
-                                      font=("Segoe UI", 12, "bold"), background=BG, foreground=INK,
+                                      font=("Segoe UI", 12, "bold"), background=BG, foreground=INK, activebackground="#ded6c7", activeforeground=INK,
                                       relief="flat", borderwidth=0, cursor="hand2", pady=12, takefocus=1)
         self.continue_link.pack(fill="x")
         self.continue_link.bind("<Button-1>", lambda event: self.choose("include"))
@@ -164,7 +185,7 @@ class DateChooser(tk.Toplevel):
         import calendar
         super().__init__(parent)
         self.title("Choose packing date")
-        self.configure(background="white")
+        self.configure(background=PANEL)
         self.resizable(False, False)
         self.transient(parent)
         self.current = current.replace(day=1)
@@ -316,20 +337,32 @@ class PackingApp(tk.Tk):
         files.grid(row=3, column=0, sticky="nsew")
         files.columnconfigure(0, weight=1)
         files.rowconfigure(0, weight=1)
-        columns = ("use", "platform", "file", "courier", "orders", "status")
-        self.tree = ttk.Treeview(files, columns=columns, show="headings", selectmode="browse", height=6)
+        icon_dir = Path(__file__).resolve().parent / "assets" / "ui"
+        self.check_icons = {state: tk.PhotoImage(master=self, file=str(icon_dir / f"check-{state}.png"))
+                            for state in ("off", "on", "mixed", "disabled")}
+        # The native tree column supports images; omit its unused expand arrow.
+        ttk.Style(self).layout("Files.Treeview.Item", [("Treeitem.padding", {
+            "sticky": "nswe", "children": [("Treeitem.image", {"sticky": ""})]})])
+        ttk.Style(self).layout("Files.Treeview.Heading", [
+            ("Treeheading.cell", {"sticky": "nswe"}),
+            ("Treeheading.border", {"sticky": "nswe", "children": [
+                ("Treeheading.padding", {"sticky": "nswe", "children": [
+                    ("Treeheading.image", {"side": "left", "sticky": ""}),
+                    ("Treeheading.text", {"sticky": "we"})]})]})])
+        columns = ("platform", "file", "courier", "orders", "status")
+        self.tree = ttk.Treeview(files, columns=columns, show="tree headings", style="Files.Treeview", selectmode="browse", height=6)
         heading_font = tkfont.Font(self, font=("Segoe UI", 11, "bold"))
         for key, label, width, minimum, stretch in (
-            ("use", "☐ Use", 68, 68, False), ("platform", "Platform", 95, 82, False),
+            ("#0", "Use", 92, 92, False), ("platform", "Platform", 95, 82, False),
             ("file", "PDF file", 335, 180, True), ("courier", "Courier", 94, 86, False),
             ("orders", "Orders", 70, 62, False), ("status", "Status", 345, 220, True)):
             if not stretch:
                 minimum = max(minimum, heading_font.measure(label) + 26)
                 width = max(width, minimum)
-            self.tree.heading(key, text=label, anchor="w", command=self.toggle_all if key == "use" else lambda: None)
-            self.tree.column(key, width=width, minwidth=minimum, stretch=stretch, anchor="center" if key in ("use", "orders", "courier") else "w")
-        self.tree.tag_configure("even", background="white")
-        self.tree.tag_configure("odd", background="#e7edf5")
+            self.tree.heading(key, text=label, anchor="center" if key == "#0" else "w", command=self.toggle_all if key == "#0" else lambda: None)
+            self.tree.column(key, width=width, minwidth=minimum, stretch=stretch, anchor="center" if key in ("#0", "orders", "courier") else "w")
+        self.tree.tag_configure("even", background=ROW)
+        self.tree.tag_configure("odd", background="#e5dfd4")
         self.tree.tag_configure("issue", foreground="#843d0a")
         self.tree.tag_configure("ready", foreground="#155238")
         self.tree.grid(row=0, column=0, sticky="nsew")
@@ -345,13 +378,13 @@ class PackingApp(tk.Tk):
         self.tree.bind("<<TreeviewSelect>>", lambda event: self._refresh_selection())
         self.empty_label = ttk.Label(files, text="No packing PDFs for this date\nChoose the correct folder and date, or click Add PDFs.",
                                      style="CardMuted.TLabel", anchor="center", justify="center")
-        totals = tk.Frame(files, background="#d5dfeb", padx=12, pady=8, highlightbackground=LINE, highlightthickness=1)
+        totals = tk.Frame(files, background="#d6cebf", padx=12, pady=8, highlightbackground=LINE, highlightthickness=1)
         totals.grid(row=1, column=0, columnspan=2, sticky="ew")
         self.totals_var = tk.StringVar()
         self.platform_totals_var = tk.StringVar()
-        tk.Label(totals, textvariable=self.totals_var, background="#d5dfeb", foreground=INK,
+        tk.Label(totals, textvariable=self.totals_var, background="#d6cebf", foreground=INK,
                  font=("Segoe UI", 11, "bold"), anchor="w").pack(fill="x")
-        tk.Label(totals, textvariable=self.platform_totals_var, background="#d5dfeb", foreground=MUTED,
+        tk.Label(totals, textvariable=self.platform_totals_var, background="#d6cebf", foreground=MUTED,
                  font=("Segoe UI", 10), anchor="w").pack(fill="x", pady=(3, 0))
 
         actions = ttk.Frame(outer, style="App.TFrame")
@@ -382,8 +415,8 @@ class PackingApp(tk.Tk):
         self.status_var = tk.StringVar(value="Ready")
         self.status_label = ttk.Label(footer, textvariable=self.status_var, style="Muted.TLabel", font=("Segoe UI", 9))
         self.status_label.grid(row=0, column=0, sticky="ew")
-        self.progress = ttk.Progressbar(footer, mode="indeterminate", length=140)
-        self.progress.grid(row=0, column=1, padx=(8, 0))
+        self.progress = ttk.Progressbar(footer, mode="indeterminate", style="Loading.Horizontal.TProgressbar")
+        self.progress.grid(row=1, column=0, sticky="ew", pady=(5, 0))
         self.progress.grid_remove()
 
     def _responsive_layout(self, event=None):
@@ -529,7 +562,7 @@ class PackingApp(tk.Tk):
                 tags.append("issue")
             elif row.get("status") in ("READY", "MISSING"):
                 tags.append("ready")
-            self.tree.insert("", "end", iid=key, values=self._row_values(row), tags=tags)
+            self.tree.insert("", "end", iid=key, image=self._row_check_icon(row), values=self._row_values(row), tags=tags)
             self.row_entries[key] = row
             if row["path"] == focus_path:
                 self.tree.selection_set(key)
@@ -543,10 +576,13 @@ class PackingApp(tk.Tk):
         self._refresh_selection()
 
     def _row_values(self, row):
-        use = "☑" if row["path"] in self.checked else ("☐" if can_select(row, self.revisions) else "—")
-        return (use, row.get("platform", ""), row["path"],
+        return (row.get("platform", ""), row["path"],
                 (row.get("courier", "Auto") + " ▾") if row.get("is_shopee") else "—",
                 row.get("orders", 0), row.get("message", ""))
+
+    def _row_check_icon(self, row):
+        state = "on" if row["path"] in self.checked else "off" if can_select(row, self.revisions) else "disabled"
+        return self.check_icons[state]
 
     def current_entry(self):
         selection = self.tree.selection()
@@ -559,15 +595,15 @@ class PackingApp(tk.Tk):
         if not item:
             return
         self.tree.selection_set(item)
-        if column == "#1":
+        if column == "#0":
             self._toggle_current()
             return "break"
-        if column == "#4":
+        if column == "#3":
             self.choose_courier(item, event.x_root, event.y_root)
             return "break"
 
     def _tree_double_click(self, event):
-        if self.tree.identify_column(event.x) not in ("#1", "#4"):
+        if self.tree.identify_column(event.x) not in ("#0", "#3"):
             self.file_details()
         return "break"
 
@@ -591,7 +627,7 @@ class PackingApp(tk.Tk):
 
     def _refresh_selection(self):
         for key, row in self.row_entries.items():
-            self.tree.item(key, values=self._row_values(row))
+            self.tree.item(key, image=self._row_check_icon(row), values=self._row_values(row))
         counts = selection_counts(self.entries, self.checked, self.revisions)
         pdfs = sum(value["pdfs"] for value in counts.values())
         orders = sum(value["orders"] for value in counts.values())
@@ -599,7 +635,8 @@ class PackingApp(tk.Tk):
         self.platform_totals_var.set("     ".join(f'{platform}: {counts[platform]["pdfs"]} PDFs / {counts[platform]["orders"]} orders' for platform in PLATFORMS if platform in counts) or "Tick Use beside the PDFs you want to generate.")
         self.generate_hint.set("A4 PDF packing lists\nSaved in this date's 000 Output folder" if pdfs else "Select a PDF above to begin.\nNew orders are selected automatically.")
         eligible = {row["path"] for row in self.entries if can_select(row, self.revisions)}
-        self.tree.heading("use", text=("☑" if eligible and eligible <= self.checked else "▣" if self.checked else "☐") + " Use")
+        state = "on" if eligible and eligible <= self.checked else "mixed" if self.checked else "off"
+        self.tree.heading("#0", image=self.check_icons[state])
         row = self.current_entry()
         for button, allowed in ((self.generate_button, pdfs > 0), (self.source_button, row is not None),
                                 (self.details_button, row is not None), (self.review_button, bool(row and row.get("requires_revision"))),
@@ -610,7 +647,8 @@ class PackingApp(tk.Tk):
         row = self.row_entries[key]
         if not row.get("is_shopee"):
             return
-        menu = tk.Menu(self, tearoff=False, font=("Segoe UI", 11))
+        menu = tk.Menu(self, tearoff=False, font=("Segoe UI", 11), background=PANEL, foreground=INK,
+                       activebackground=SELECTED, activeforeground=INK)
         for courier in ("Auto", "SPX", "FLASH"):
             menu.add_command(label=courier + ("  ✓" if courier == row.get("courier", "Auto") else ""),
                              command=lambda value=courier: self.set_courier(row, value))
@@ -680,7 +718,8 @@ class PackingApp(tk.Tk):
         ttk.Label(container, text=heading, style="Section.TLabel", wraplength=880).pack(anchor="w", pady=(0, 14))
         area = ttk.Frame(container, style="Card.TFrame")
         area.pack(fill="both", expand=True)
-        box = tk.Text(area, wrap="word", background="white", foreground=INK, relief="flat", padx=12, pady=12, font=("Segoe UI", 11))
+        box = tk.Text(area, wrap="word", background=ROW, foreground=INK, selectbackground=SELECTED, selectforeground=INK,
+                      relief="flat", padx=12, pady=12, font=("Segoe UI", 11))
         box.insert("1.0", text)
         box.configure(state="disabled")
         box.pack(side="left", fill="both", expand=True)
@@ -747,7 +786,8 @@ class PackingApp(tk.Tk):
         if result.get("skipped_repeat_orders"):
             text += f' {result["skipped_repeat_orders"]} already-generated order(s) skipped.'
         ttk.Label(frame, text=text, style="Muted.TLabel", wraplength=750).pack(anchor="w", pady=(6, 14))
-        files = tk.Listbox(frame, font=("Segoe UI", 11), relief="flat", activestyle="none", selectbackground="#deebfb", selectforeground=INK)
+        files = tk.Listbox(frame, font=("Segoe UI", 11), relief="flat", activestyle="none", background=ROW, foreground=INK,
+                           selectbackground=SELECTED, selectforeground=INK, highlightbackground=LINE)
         files.pack(fill="both", expand=True)
         for row in made:
             files.insert("end", row["filename"] + f'  ({row.get("pages", "")} pages)')
@@ -927,7 +967,7 @@ def ui_self_test(report_path):
         assert app.checked == {"SPX/first.pdf", "SPX/shared.pdf", "Lazada/lazada.pdf"}
         assert selection_counts(rows, app.checked) == {"SPX": {"pdfs": 2, "orders": 2}, "LAZADA": {"pdfs": 1, "orders": 1}}
         assert "pieces" not in app.totals_var.get().lower()
-        assert app.tree.item("2", "values")[3] == "—"
+        assert app.tree.set("2", "courier") == "—"
         app.toggle_all()
         assert not app.checked and app.generate_button.instate(["disabled"])
         app.revisions.add("SPX/changed.pdf")

@@ -19,13 +19,13 @@ import tkinter as tk
 from tkinter import font as tkfont, messagebox, ttk
 import uuid
 
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageTk
 
 
 FIELDS = ("original_product", "original_variation", "alternative_product", "alternative_variation")
 LABELS = {"sku": "SKU", "original_product": "Ecommerce Name", "original_variation": "Ecommerce Variation",
           "alternative_product": "Product Name", "alternative_variation": "Size"}
-BG, TEXT, MUTED, PRIMARY = "#edf2f7", "#162334", "#435269", "#19579d"
+BG, TEXT, MUTED, PRIMARY = "#e9e3d8", "#292c31", "#555a61", "#4c4f54"
 MISSING_EXCEL = "Error: No file has been detected\nPlease do not exit excel file before clicking import"
 
 
@@ -279,7 +279,7 @@ class ExcelSession:
             pass
 
 
-def add_column_dividers(tree, color="#7b8ba0"):
+def add_column_dividers(tree, color="#777b80"):
     """Add visible column boundaries without changing Treeview input or data.
 
     Call after assigning xscrollcommand so the existing scrollbar keeps working.
@@ -356,7 +356,6 @@ class ProductsDialog(tk.Toplevel):
         self.geometry(f"{width}x{height}+{max(10, (self.winfo_screenwidth()-width)//2)}+{max(10, (self.winfo_screenheight()-height)//2)}")
         self.minsize(940, 620)
         self.protocol("WM_DELETE_WINDOW", self.close)
-        self._lock_images = {}
         self.closed_icon, self.open_icon = self._lock_icon(False), self._lock_icon(True)
         self.disabled_closed_icon = self._lock_icon(False, disabled=True)
         self.disabled_open_icon = self._lock_icon(True, disabled=True)
@@ -368,33 +367,18 @@ class ProductsDialog(tk.Toplevel):
         self._poll_id = self.after(70, self._poll_workers)
 
     def _lock_icon(self, opened, disabled=False):
-        # Render at 4x for clean outlines. The open shackle visibly swings to
-        # the right; its shape and gap distinguish the states without color.
-        scale = 4
-        source = Image.new("RGBA", (32*scale, 32*scale))
-        draw = ImageDraw.Draw(source)
-        ink = "#667387" if disabled else ("#00685d" if opened else "#162334")
-
-        def box(coords):
-            return tuple(int(value*scale) for value in coords)
-
-        if opened:
-            draw.arc(box((13, 2, 29, 18)), 180, 352, fill=ink, width=3*scale)
-            draw.line(box((13, 10, 13, 17)), fill=ink, width=3*scale)
-        else:
-            draw.arc(box((8, 2, 24, 18)), 180, 360, fill=ink, width=3*scale)
-            draw.line(box((8, 10, 8, 17)), fill=ink, width=3*scale)
-            draw.line(box((24, 10, 24, 17)), fill=ink, width=3*scale)
-        draw.rounded_rectangle(box((4, 15, 28, 30)), radius=3*scale, fill="#ffffff", outline=ink, width=3*scale)
-        source = source.resize((32, 32), Image.Resampling.LANCZOS)
-        if not disabled:
-            self._lock_images[opened] = source
+        name = "lock-open" if opened else "lock-closed"
+        if disabled:
+            name += "-disabled"
+        with Image.open(Path(__file__).resolve().parent / "assets" / "ui" / f"{name}.png") as icon:
+            source = icon.convert("RGBA")
         return ImageTk.PhotoImage(source, master=self)
 
     def _both_lock_icons(self):
         source = Image.new("RGBA", (84, 34))
-        source.alpha_composite(self._lock_images[False], (2, 0))
-        source.alpha_composite(self._lock_images[True], (48, 0))
+        for name, x in (("closed", 2), ("open", 48)):
+            with Image.open(Path(__file__).resolve().parent / "assets" / "ui" / f"lock-{name}-header.png") as icon:
+                source.alpha_composite(icon.convert("RGBA"), (x, 0))
         return ImageTk.PhotoImage(source, master=self)
 
     def _build(self):
@@ -404,18 +388,22 @@ class ProductsDialog(tk.Toplevel):
         style.configure("Products.Muted.TLabel", background=BG, foreground=MUTED, font=("Segoe UI", 11))
         style.configure("Products.State.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 11, "bold"))
         style.configure("Products.Title.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 22, "bold"))
-        style.configure("Products.Treeview", font=("Segoe UI", 12), rowheight=46, background="white", fieldbackground="white", foreground=TEXT,
-                        borderwidth=2, relief="solid", bordercolor="#7b8ba0", lightcolor="#7b8ba0", darkcolor="#7b8ba0")
+        style.configure("Products.Treeview", font=("Segoe UI", 12), rowheight=46, background="#fffdf7", fieldbackground="#fffdf7", foreground=TEXT,
+                        borderwidth=2, relief="solid", bordercolor="#777b80", lightcolor="#777b80", darkcolor="#777b80")
         # Paint selection with row tags so selecting a changed row keeps its
         # amber highlight instead of covering it with the theme's blue fill.
-        style.map("Products.Treeview", background=[("disabled", "#f3f6fa")], foreground=[("disabled", "#697586")])
-        style.configure("Products.Treeview.Heading", font=("Segoe UI", 11, "bold"), padding=(8, 10), background="#d5dfeb", foreground=TEXT,
-                        borderwidth=2, relief="raised", bordercolor="#64758b", lightcolor="#7b8ba0", darkcolor="#64758b")
-        style.map("Products.Treeview.Heading", background=[("active", "#bfcfe2")])
-        style.configure("Products.TButton", padding=(12, 9), font=("Segoe UI", 11), foreground=TEXT, background="white", bordercolor="#7b8ba0", lightcolor="#7b8ba0", darkcolor="#7b8ba0")
+        style.map("Products.Treeview", background=[("disabled", "#ded9d0")], foreground=[("disabled", "#666a70")])
+        style.configure("Products.Treeview.Heading", font=("Segoe UI", 11, "bold"), padding=(8, 10), background="#4c4f54", foreground="#fffaf0",
+                        borderwidth=2, relief="raised", bordercolor="#777b80", lightcolor="#777b80", darkcolor="#777b80")
+        style.map("Products.Treeview.Heading", background=[("active", "#363a40")])
+        style.configure("Products.TButton", padding=(12, 9), font=("Segoe UI", 11), foreground=TEXT, background="#f8f4ec", bordercolor="#777b80", lightcolor="#777b80", darkcolor="#777b80")
+        style.map("Products.TButton", background=[("disabled", "#ded9d0"), ("active", "#ded6c7")], foreground=[("disabled", "#666a70")])
         style.configure("Products.TCheckbutton", background=BG, foreground=TEXT, font=("Segoe UI", 11))
+        style.map("Products.TCheckbutton", background=[("active", BG)], foreground=[("disabled", "#666a70")])
         style.configure("Products.Primary.TButton", padding=(14, 10), font=("Segoe UI", 12, "bold"), foreground="white", background=PRIMARY)
-        style.map("Products.Primary.TButton", background=[("active", "#14477f"), ("disabled", "#d9e1ec")], foreground=[("disabled", "#697586")])
+        style.map("Products.Primary.TButton", background=[("disabled", "#ded9d0"), ("active", "#363a40")], foreground=[("disabled", "#666a70")])
+        style.configure("Loading.Horizontal.TProgressbar", background=PRIMARY, troughcolor="#f8f4ec",
+                        bordercolor="#777b80", lightcolor=PRIMARY, darkcolor=PRIMARY, thickness=12)
         outer = ttk.Frame(self, padding=20, style="Products.TFrame")
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
@@ -453,10 +441,10 @@ class ProductsDialog(tk.Toplevel):
             self.tree.column(field, width=width, minwidth=140 if field.endswith("variation") else 220, stretch=True)
         self.tree.heading("details", text="Ecommerce Details", anchor="w")
         self.tree.column("details", width=180, minwidth=180, stretch=False)
-        self.tree.tag_configure("odd", background="#e7edf5")
-        self.tree.tag_configure("dirty", background="#ffe599", foreground=TEXT)
-        self.tree.tag_configure("selected", background="#dceafa", foreground=TEXT)
-        self.tree.tag_configure("dirtyselected", background="#ffd966", foreground=TEXT)
+        self.tree.tag_configure("odd", background="#e5dfd4")
+        self.tree.tag_configure("dirty", background="#ffe599", foreground="#162334")
+        self.tree.tag_configure("selected", background="#cbd0d5", foreground=TEXT)
+        self.tree.tag_configure("dirtyselected", background="#ffd966", foreground="#162334")
         self.tree.grid(row=0, column=0, sticky="nsew")
         vertical = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
         horizontal = ttk.Scrollbar(table, orient="horizontal", command=self.tree.xview)
@@ -502,6 +490,9 @@ class ProductsDialog(tk.Toplevel):
         self.status_var = tk.StringVar(value="Viewing products. Select a row to see Ecommerce Details, or use the open padlock above to edit.")
         self.status_label = ttk.Label(outer, textvariable=self.status_var, style="Products.Muted.TLabel", wraplength=1120)
         self.status_label.grid(row=7, column=0, sticky="ew")
+        self.progress = ttk.Progressbar(outer, mode="indeterminate", style="Loading.Horizontal.TProgressbar")
+        self.progress.grid(row=8, column=0, sticky="ew", pady=(5, 0))
+        self.progress.grid_remove()
         self.bind("<Configure>", lambda e: self.status_label.configure(wraplength=max(850, self.winfo_width()-60)) if e.widget is self else None)
         self._display_columns()
 
@@ -527,7 +518,7 @@ class ProductsDialog(tk.Toplevel):
                 tip = tk.Toplevel(self)
                 tip.overrideredirect(True)
                 tip.geometry(f"+{event.x_root+12}+{event.y_root+18}")
-                tk.Label(tip, text=content, background="#fff8d8", foreground=TEXT, padx=8, pady=6, wraplength=450, justify="left", font=("Segoe UI", 11)).pack()
+                tk.Label(tip, text=content, background="#fff8d8", foreground="#162334", padx=8, pady=6, wraplength=450, justify="left", font=("Segoe UI", 11)).pack()
                 state["window"] = tip
             state["timer"] = self.after(650, show)
         widget.bind("<Motion>", motion, add="+")
@@ -653,6 +644,13 @@ class ProductsDialog(tk.Toplevel):
         self.edit_button.configure(text="Unlock & edit" if len(selected) == 1 and not selected_unlocked else "Edit selected")
         self.edit_state_var.set("Editing locked" if self.edit_locked else "Editing unlocked")
         self.configure(cursor="watch" if self.busy else "")
+        if self.busy:
+            if not self.progress.winfo_manager():
+                self.progress.grid()
+                self.progress.start(18)
+        else:
+            self.progress.stop()
+            self.progress.grid_remove()
 
     def _selected(self, _event=None):
         selection = self.tree.selection()
@@ -865,7 +863,7 @@ class ProductsDialog(tk.Toplevel):
         for field, label, width in (("platform", "Platform", 120), ("sku", "Seller SKU", 240), ("product", "Ecommerce Name", 470), ("variation", "Ecommerce Variation", 220)):
             tree.heading(field, text=label, command=lambda key=field: show_sorted(key))
             tree.column(field, width=width, minwidth=100)
-        tree.tag_configure("odd", background="#e7edf5")
+        tree.tag_configure("odd", background="#e5dfd4")
 
         def populate():
             if tree.get_children():
@@ -881,7 +879,7 @@ class ProductsDialog(tk.Toplevel):
         horizontal.grid(row=1, column=0, sticky="ew")
         add_column_dividers(tree)
         full_text = tk.StringVar(value="Select a listing to read its full name and variation below.")
-        tree.tag_configure("selected", background="#c5dbf7", foreground=TEXT)
+        tree.tag_configure("selected", background="#cbd0d5", foreground=TEXT)
 
         def select_detail(_event=None):
             selected = tree.selection()
