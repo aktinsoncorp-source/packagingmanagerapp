@@ -1,0 +1,12 @@
+Packing List Manager 2.0.0 — Python source preview
+
+Separate V2.0.0 folder and codex/v2.0.0 branch; installed V1 retained.
+Python/Tkinter desktop interface with a clearer daily packing workflow.
+SKU-based definitions, with Shopee as the current master catalog.
+Inventory labels: Product Name and Size. Source labels: Ecommerce Name and Ecommerce Variation.
+Ecommerce details preserve seller aliases and previous listing names.
+Existing IDs, locks, linked originals and audit fingerprints retained.
+Missing or generic source SKUs retain legacy matching.
+Flash headers are pastel yellow; SPX orange and Lazada/TikTok blue remain.
+A4, prices, buyer comments, picking summaries, history, repeat warnings and sales retained.
+No executable packaging or installation replacement at this stage.

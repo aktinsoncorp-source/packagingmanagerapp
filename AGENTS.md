@@ -1,5 +1,12 @@
 # Packing list preferences
 
+- V2.0.0 Flash packing documents use pastel yellow order and column headers and matching picking-summary headers/totals. SPX remains orange; Lazada/TikTok remain blue.
+- V2 accessibility uses readable larger text, strong table separators, and distinct smooth lock icons. Keep all main and Products controls visible at 125% display scaling on an 1100x688 window; lock and unsaved states must have cues beyond color alone.
+
+- V2.0.0 development lives separately in `V2.0.0` on branch `codex/v2.0.0`. Keep it runnable Python source until packaging is explicitly requested. Preserve the existing V1 application.
+- For V2, Shopee is the master for SKU identities and ecommerce descriptions. Use the updated local catalogs and preserve historical Lazada seller-SKU aliases. Never edit Lazada product names in its upload workbook.
+- V2 Define Names uses SKU as identity; internal fields are Product Name and Size. Ecommerce Name and Ecommerce Variation remain viewable as linked source evidence. Ecommerce name changes must not break a SKU's saved inventory names. Preserve earlier alternatives, row IDs, locks, original fingerprints, and audit snapshots.
+
 - Always use A4 paper for packing lists.
 - Use one clearly separated bordered table per order. Show the Order ID once as the table header and keep all products for that order underneath it.
 - Keep each entire order table together on one page.

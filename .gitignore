@@ -6,6 +6,7 @@
 !/README.md
 !/HANDOVER.md
 !/PackingListApp/
+!/V2.0.0/
 
 /PackingListApp/*
 !/PackingListApp/src/
@@ -49,3 +50,14 @@ Desktop.ini
 # by the root allowlist above. Back up those business files separately.
 
 !/PackingListApp/Release Notes.txt
+
+# V2 remains runnable Python source; private catalogs and QA outputs stay local.
+/V2.0.0/Packing List Manager/
+/V2.0.0/Reference/
+/V2.0.0/Test Data/
+/V2.0.0/PackingListApp/qa/*
+!/V2.0.0/PackingListApp/qa/*.py
+!/V2.0.0/PackingListApp/qa/*.ps1
+/V2.0.0/PackingListApp/src/assets/picking_aliases.json
+**/SkuCatalog.json
+**/Settings.json

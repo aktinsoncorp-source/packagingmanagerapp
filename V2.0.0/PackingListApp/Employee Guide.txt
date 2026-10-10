@@ -1,0 +1,31 @@
+PACKING LIST MANAGER 2.0.0
+
+Open Start Packing List Manager.cmd in the V2.0.0 folder.
+
+Choose your shop folder and the date to pack. A dated folder is named YYYYMMDD, for example 20261010. The app finds packing PDFs inside it.
+
+Check the PDFs you want. For Shopee, Auto uses the SPX or FLASH folder. Change a file's courier if needed. Lazada and TikTok do not need a courier choice.
+
+Click Generate packing lists. The app checks orders and saves PDFs in that date's 000 Output folder. Use Completed documents or Open output folder to view them.
+
+If repeated orders are found, No makes only new orders. Use Continue to Generate the Repeated Orders only when you need earlier orders again. Enter or Escape chooses No.
+
+If a source PDF changed after printing, use Review changed file and compare it with the earlier record before deciding what to generate.
+
+PRODUCTS
+
+SKU is the stable product code. Product Name and Size are the names your staff use for inventory. A listing can be renamed and still use these names when its SKU stays the same.
+
+Products opens locked. Use the outline padlock to unlock editing, then unlock any finished row you need to change. Save before locking or closing. Yellow rows contain unsaved changes.
+
+Use Ecommerce details to check original names, variations and seller SKUs. Show ecommerce columns adds those descriptions to the table.
+
+Blank Product Name or Size keeps that field's ecommerce value. Old files without a usable SKU continue to use their saved ecommerce name and variation. Review marked conflicts before generating affected products.
+
+Edit in Excel opens a temporary workbook. Keep it open, edit, then return to the app and click Import from Excel. Locked rows remain protected. Existing SKU identity is protected; do not move values into unrelated products.
+
+EXPORT ITEM SALES
+
+Export Item Sales reports every readable order for the chosen date, regardless of checked PDFs or packing status. It does not mark orders packed. Each workbook replaces that date's earlier ERP snapshot; do not add repeated snapshots together.
+
+Keep the full V2.0.0 folder together. This preview runs from Python source and has not been packaged.

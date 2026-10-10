@@ -2,7 +2,10 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Current engine version: **1.11.2**.
+Installed V1 engine version: **1.11.2**. The separate **V2.0.0 Python source
+preview** is in [V2.0.0](V2.0.0/README.md) on branch `codex/v2.0.0`.
+V2 uses SKU-based definitions and an accessible Python desktop interface.
+It has not been packaged or installed over V1.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
