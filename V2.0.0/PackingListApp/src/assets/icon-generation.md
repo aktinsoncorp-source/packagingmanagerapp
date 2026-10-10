@@ -11,3 +11,9 @@ The ICO is a format conversion of the generated artwork, with no visual changes.
 Use case: logo-brand. A simple parcel with one large off-white checkmark, bold graphite contours and muted ochre fill for the Station Board interface. Strong silhouette and thick high-contrast shapes, legible at 16 and 32 pixels. No tiny details, text or decorative symbols. Transparent background, one icon only.
 
 Tool setting: `transparent_background: true`.
+
+Corrected on October 10, 2026 after full-size inspection found mottled patches.
+Edit instruction: retain the silhouette and checkmark; remove annotation marks,
+blotches, stains, mottling and texture throughout; use even ochre, graphite and
+off-white surfaces with a transparent exterior. Inspected the regenerated image
+at full size before creating the Windows ICO sizes.
