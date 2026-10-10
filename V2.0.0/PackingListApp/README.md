@@ -28,4 +28,14 @@ Run `python -m unittest discover -s qa -p "test_*.py" -v`. Inherited private-dat
 
 `python qa/verify_ui_layout.py` checks the Station Board interface at normal and 125% scaling, verifies checkbox/courier routing and animated loading, and saves local screenshots. It uses synthetic rows and does not write product settings or packing outputs.
 
-Keep work local. The checkpoint is on `codex/v2.0.0`; a verified bundle belongs in the workspace's `Git/v2.0.0`. No executable is built at this stage.
+## Packaging
+
+The approved V2 branch is merged into `main`. Keep the source runnable and preserve V1.
+
+`build.ps1` creates a fresh `../Release/Packing List Manager` folder. It packages the pinned dependencies, CPython 3.12 x64, Tcl/Tk, readable Python sources, Office helpers, icons and approved private catalogs. A small .NET launcher keeps the existing `Packing List Manager.exe` filename and opens the Python interface without a console. Use `-Python`, `-ReleasePath` and `-CatalogPath` to override the build inputs. No downloads occur in this build script.
+
+`build_installer.ps1` uses the portable [NSIS compiler](https://nsis.sourceforge.io/Download), supplied with `-MakeNSIS` or placed at `.builddeps/nsis-3.13/makensis.exe`. The release was built with NSIS 3.13 (official ZIP SHA256 `BA63DFFC4410EE89193E1CB5A41989991BD77C61068DA17E3156D136B7B0B3D8`). It records an exact package inventory, compiles the per-user installer and derives a non-recursive uninstall list. Existing catalog/settings files are never overwritten or removed. Build outputs must be fresh; no release is silently replaced.
+
+`qa/verify_installer.py SETUP_EXE PACKAGE_DIR --source SPLIT_LAZADA_PDF` tests installation, packaged UI, real Office output, reinstall and uninstall using an isolated QA folder. `/NOINTEGRATION` suppresses shortcuts/registration only for this test. The normal installer creates Windows shortcuts and an Apps & Features uninstall entry. Microsoft Word remains required for PDF export and Excel for live definition editing.
+
+Keep work local. The verified release Git bundle belongs in `Git/v2.0.0`. Release binaries and private catalogs stay outside Git; uploads require authorization.

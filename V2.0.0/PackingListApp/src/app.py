@@ -19,7 +19,9 @@ from tkinter import font as tkfont
 
 
 VERSION = "2.0.0"
-DATA_DIR = Path(__file__).resolve().parents[2] / "Packing List Manager"
+_SOURCE_DIR = Path(__file__).resolve().parent
+_PACKAGED = _SOURCE_DIR.name == "Source" and _SOURCE_DIR.parent.name == "App Files"
+DATA_DIR = _SOURCE_DIR.parents[1] if _PACKAGED else _SOURCE_DIR.parents[1] / "Packing List Manager"
 BG = "#f1f2ef"
 INK = "#24292c"
 MUTED = "#505b61"
@@ -324,7 +326,7 @@ class PackingApp(tk.Tk):
         self._attention_seen = set()
         self._attention_timer = self._attention_prompt_timer = None
         self._attention_bright = False
-        self.root_folder = Path(__file__).resolve().parents[3]
+        self.root_folder = Path.home() / "Documents" if _PACKAGED else Path(__file__).resolve().parents[3]
         self.packing_date = date.today()
         try:
             saved = json.loads(self.settings_path.read_text(encoding="utf-8-sig"))

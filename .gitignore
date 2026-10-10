@@ -61,3 +61,5 @@ Desktop.ini
 /V2.0.0/PackingListApp/src/assets/picking_aliases.json
 **/SkuCatalog.json
 **/Settings.json
+/V2.0.0/Release/
+/V2.0.0/PackingListApp/.builddeps/

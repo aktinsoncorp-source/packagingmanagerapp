@@ -1,31 +1,34 @@
 PACKING LIST MANAGER 2.0.0
 
-Open Start Packing List Manager.cmd in the V2.0.0 folder.
+INSTALL
+Double-click Packing List Manager Setup 2.0.0.exe and follow the setup screens.
+The installer runs for your Windows account. No separate Python installation is needed.
+Microsoft Word desktop is required to create and verify packing PDFs.
+Microsoft Excel desktop is needed only for editing definitions with Excel.
 
-Choose your shop folder and the date to pack. A dated folder is named YYYYMMDD, for example 20261010. The app finds packing PDFs inside it.
+PORTABLE COPY
+Extract the entire portable ZIP to a writable folder, then open Packing List Manager.exe.
+Keep App Files, ProductNames.json and SkuCatalog.json with the application.
 
-Check the PDFs you want. For Shopee, Auto uses the SPX or FLASH folder. Change a file's courier if needed. Lazada and TikTok do not need a courier choice.
+DAILY USE
+1. Open Packing List Manager from its shortcut or application folder.
+2. Choose your main packing folder and the packing date.
+3. Check Use beside the PDFs to include. Click Use in the heading to select all.
+4. Review any highlighted issues. Define Names shows the inventory Product Name
+   and Size attached to each SKU; Ecommerce Details shows its website descriptions.
+5. Click Generate Packing Lists. Finished A4 PDFs appear in that date's 000 Output.
 
-Click Generate packing lists. The app checks orders and saves PDFs in that date's 000 Output folder. Use Completed documents or Open output folder to view them.
+Lazada shows Order Number and Tracking Number. Separate tracking numbers remain
+separate shipment tables even when the order number is the same.
+If repeated orders are found, No includes only orders without a matching output.
 
-If repeated orders are found, No makes only new orders. Use Continue to Generate the Repeated Orders only when you need earlier orders again. Enter or Escape chooses No.
+PRODUCTS AND UPDATES
+This package includes your approved SKU catalog and saved product definitions.
+Installing again preserves existing ProductNames.json, SkuCatalog.json and settings.
+Back up those files from the application folder before moving computers.
+Uninstall removes program files but keeps your saved product data. Source PDFs,
+generated packing lists and their dated processing histories are never removed.
 
-If a source PDF changed after printing, use Review changed file and compare it with the earlier record before deciding what to generate.
-
-PRODUCTS
-
-SKU is the stable product code. Product Name and Size are the names your staff use for inventory. A listing can be renamed and still use these names when its SKU stays the same.
-
-Products opens locked. Use the outline padlock to unlock editing, then unlock any finished row you need to change. Save before locking or closing. Yellow rows contain unsaved changes.
-
-Use Ecommerce details to check original names, variations and seller SKUs. Show ecommerce columns adds those descriptions to the table.
-
-Blank Product Name or Size keeps that field's ecommerce value. Old files without a usable SKU continue to use their saved ecommerce name and variation. Review marked conflicts before generating affected products.
-
-Edit in Excel opens a temporary workbook. Keep it open, edit, then return to the app and click Import from Excel. Locked rows remain protected. Existing SKU identity is protected; do not move values into unrelated products.
-
-EXPORT ITEM SALES
-
-Export Item Sales reports every readable order for the chosen date, regardless of checked PDFs or packing status. It does not mark orders packed. Each workbook replaces that date's earlier ERP snapshot; do not add repeated snapshots together.
-
-Keep the full V2.0.0 folder together. This preview runs from Python source and has not been packaged.
+FIRST START
+Choose your usual packing folder. The installer does not include test PDFs,
+test orders, earlier outputs or a preset folder belonging to another computer.

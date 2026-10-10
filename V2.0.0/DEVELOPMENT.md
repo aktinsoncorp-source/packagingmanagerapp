@@ -1,6 +1,8 @@
-# V2.0.0 source checkpoint
+# V2.0.0 release checkpoint
 
-Branch: `codex/v2.0.0`. This preview lives entirely under `V2.0.0`; the root V1 Python/C# sources and installed application are retained. No V2 executable has been built. The desktop interface is Python/Tkinter, with Windows Office helpers for verified PDF export and live Excel editing.
+Approved branch: `codex/v2.0.0`, merged into `main` for release. V2 lives under `V2.0.0`; the root V1 Python/C# sources and installed application are retained. The desktop interface remains Python/Tkinter, packaged with a private CPython/Tk runtime and a small Windows launcher. Windows Office helpers verify PDF export and support live Excel editing. `Release` contains the installer and portable package; the Python source remains editable.
+
+Release checks are recorded in `PackingListApp/qa/release-2.0.0-regression.txt` (281 passing cases), `packaged-v2-ui.json`, and `installer-verification.txt`. The installer is exercised in a separate QA folder, including preservation of edited catalogs during reinstall/uninstall and real Lazada split-shipment PDF generation. Earlier source-preview verification remains below.
 
 The private registry contains 1,384 master SKU records and 2,449 marketplace seller aliases from the approved local catalogs. Shopee supplies the current descriptions. The V2 definition copy retains every pre-existing definition ID, lock and inventory alternative; the three user-approved conflicting values were resolved in this copy. Platform-scoped unknown codes cannot silently become a different marketplace's known SKU. Older blank or generic size-only codes retain legacy matching.
 

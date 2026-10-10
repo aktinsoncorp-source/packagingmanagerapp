@@ -2,10 +2,11 @@
 
 Offline Windows application for creating A4 packing lists and per-document
 product picking summaries from Shopee SPX/FLASH, Lazada and TikTok PDFs.
-Installed V1 engine version: **1.11.2**. The separate **V2.0.0 Python source
-preview** is in [V2.0.0](V2.0.0/README.md) on branch `codex/v2.0.0`.
-V2 uses SKU-based definitions and an accessible Python desktop interface.
-It has not been packaged or installed over V1.
+Current release: **2.0.0**, in [V2.0.0](V2.0.0/README.md), approved for `main`.
+V2 uses SKU-based definitions and the Station Board Python desktop interface.
+Its local `V2.0.0/Release` folder contains a Windows installer and portable ZIP
+with a private Python runtime. Earlier V1 sources and the installed **1.11.2**
+application remain preserved in their original folders.
 
 Version 1.5 adds **Define Name**: an editable catalog of original product and
 variation pairs with independent alternative fields. Matching final names and
@@ -18,9 +19,9 @@ until clicking Import. The program then saves, imports, closes and removes it.
 program and are private data excluded from Git. Copy them with the application
 when moving computers. Existing Word files retain their printed names.
 
-The program is maintained in [PackingListApp](PackingListApp/README.md).
-Employee instructions are in [Employee Guide](PackingListApp/Employee%20Guide.txt).
-See [HANDOVER.md](HANDOVER.md) for the current verification status.
+V2 is maintained in [V2.0.0/PackingListApp](V2.0.0/PackingListApp/README.md).
+Employee instructions are in [V2 Employee Guide](V2.0.0/PackingListApp/Employee%20Guide.txt).
+The notes below and [HANDOVER.md](HANDOVER.md) retain the V1 maintenance history.
 
 ## Repository contents
 
