@@ -3,6 +3,8 @@ Unicode true
 !include "LogicLib.nsh"
 !include "FileFunc.nsh"
 !include "x64.nsh"
+!include "StrFunc.nsh"
+${StrRep}
 !ifndef APPDIR
   !error "APPDIR must point to the verified packaged application."
 !endif
@@ -74,6 +76,19 @@ Function .onInit
   ${EndIf}
 FunctionEnd
 
+!macro ClearOldAdminFlag Hive
+  ReadRegStr $0 ${Hive} "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\Packing List Manager.exe"
+  ${If} $0 == "~ RUNASADMIN"
+  ${OrIf} $0 == "RUNASADMIN"
+    DeleteRegValue ${Hive} "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\Packing List Manager.exe"
+  ${Else}
+    ${StrRep} $1 $0 "RUNASADMIN" ""
+    ${If} $1 != $0
+      WriteRegStr ${Hive} "Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers" "$INSTDIR\Packing List Manager.exe" "$1"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
 Section "Packing List Manager" MainSection
   SectionIn RO
   SetOverwrite on
@@ -99,6 +114,9 @@ Section "Packing List Manager" MainSection
   WriteINIStr "$INSTDIR\App Files\InstallMode.ini" "Setup" "NoIntegration" "$NoIntegration"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   ${If} $NoIntegration == 0
+    ; Remove only the obsolete elevation flag, retaining other compatibility settings.
+    !insertmacro ClearOldAdminFlag HKLM
+    !insertmacro ClearOldAdminFlag HKCU
     WriteRegStr HKLM "Software\PackingListManagerV2" "InstallDir" "$INSTDIR"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PackingListManagerV2" "DisplayName" "Packing List Manager"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\PackingListManagerV2" "DisplayVersion" "2.0.0"
