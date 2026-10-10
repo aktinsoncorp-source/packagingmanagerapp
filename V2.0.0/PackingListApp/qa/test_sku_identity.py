@@ -170,7 +170,7 @@ class SkuIdentityTests(unittest.TestCase):
             names.import_excel(self.book, catalog['rows'])
         self.assertEqual(names.load_catalog(self.path), catalog)
 
-    def test_excel_single_shared_edit_propagates_but_same_sku_cannot_split_names(self):
+    def test_excel_single_shared_edit_propagates_and_conflicting_sku_names_can_be_chosen(self):
         catalog = self.defined()
         catalog['rows'][0]['locked'] = False
         catalog = names.save_catalog(self.path, catalog['rows'], catalog['revision'])
@@ -181,13 +181,38 @@ class SkuIdentityTests(unittest.TestCase):
         self.assertEqual(imported['rows'][0]['alternative_product'], 'NEW INTERNAL')
         names.export_excel(self.book, catalog)
         self.edit(lambda sheet: (sheet.__setitem__('C2', 'FIRST INTERNAL'), sheet.__setitem__('C3', 'SECOND INTERNAL')))
-        with self.assertRaisesRegex(PackingError, 'same SKU'):
-            names.import_excel(self.book, catalog['rows'])
+        preview = names.import_excel(self.book, catalog['rows'])
+        self.assertNotIn('rows', preview)
+        conflict = preview['sku_conflicts'][0]
+        selected = conflict['choices'][1]
+        imported = names.import_excel(self.book, catalog['rows'], {conflict['id']: selected})
+        self.assertEqual(len(imported['rows']), 1)
+        self.assertEqual([imported['rows'][0][f] for f in names.FIELDS[2:]], selected)
+        self.assertEqual(names.source_pairs(imported['rows'][0]), names.source_pairs(catalog['rows'][0]))
+        saved = names.save_catalog(self.path, imported['rows'], catalog['revision'])
+        self.assertEqual(saved['rows'][0]['ecommerce_sources'], catalog['rows'][0]['ecommerce_sources'])
+        with self.assertRaisesRegex(PackingError, 'changed'):
+            names.import_excel(self.book, catalog['rows'], {conflict['id']: ['UNSEEN','SIZE']})
 
     def test_manual_sku_can_be_added_without_invented_ecommerce_names(self):
         result = names.validate_rows([{'sku': 'NEW-100ML', 'alternative_product': 'INTERNAL', 'alternative_variation': '100 ML'}])
         self.assertEqual(result[0]['sku'], 'NEW-100ML')
         self.assertEqual(result[0]['original_product'], 'NEW-100ML')
+
+    def test_matching_same_sku_definitions_are_marked_for_automatic_merge(self):
+        catalog=self.defined()
+        rows=copy.deepcopy(catalog['rows'])
+        rows[0]['locked']=False
+        other=copy.deepcopy(rows[0])
+        other.update(id='duplicate',original_product='ANOTHER LISTING',aliases=[])
+        rows.append(other)
+        preview=names.prepare_save(rows)
+        self.assertTrue(preview['merges'][0]['same_sku'])
+        groups=[g['ids'] for g in preview['merges'] if g['same_sku']]
+        saved=names.save_catalog(self.path,preview['rows'],catalog['revision'],groups,unlocked_ids=[rows[0]['id']])
+        self.assertEqual(len(saved['rows']),1)
+        self.assertEqual(len(names.source_pairs(saved['rows'][0])),3)
+        self.assertEqual(saved['rows'][0]['ecommerce_sources'],rows[0]['ecommerce_sources'])
 
     def test_manual_generic_or_duplicate_sku_cannot_silently_reassign_a_product(self):
         catalog = self.defined()

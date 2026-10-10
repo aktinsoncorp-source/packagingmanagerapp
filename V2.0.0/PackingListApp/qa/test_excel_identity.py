@@ -60,7 +60,9 @@ class ExcelIdentityTests(unittest.TestCase):
         self.edit(lambda ws:self.paste(ws,[['C ORIGINAL','BIG','STANDARD C','1L'],['B LINK','SMALL','STANDARD A','100ML'],['A ORIGINAL','SMALL','STANDARD A','100ML']]))
         self.assertEqual(names.import_excel(self.book,self.catalog['rows'])['rows'],self.catalog['rows'])
         self.edit(lambda ws:ws.__setitem__('C2','FORBIDDEN'))
-        with self.assertRaisesRegex(PackingError,'locked'):names.import_excel(self.book,self.catalog['rows'])
+        preview=names.import_excel(self.book,self.catalog['rows'])
+        self.assertEqual(preview['skipped_locked'],[2])
+        self.assertEqual(preview['rows'],self.catalog['rows'])
         self.assertEqual(names.load_catalog(self.path),self.catalog)
     def test_genuine_original_rename_still_uses_its_hidden_identity(self):
         self.edit(lambda ws:ws.__setitem__('A3','RENAMED LINK'))

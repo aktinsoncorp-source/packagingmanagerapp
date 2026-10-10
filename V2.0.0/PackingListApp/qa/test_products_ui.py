@@ -199,6 +199,32 @@ class ProductsTkTests(unittest.TestCase):
         self.assertTrue(self.dialog.model.dirty)
         self.assertFalse(self.dialog.busy)
 
+    def test_export_available_while_view_locked(self):
+        self.dialog.set_edit_locked(True)
+        self.assertNotIn('disabled',self.dialog.export_button.state())
+        self.assertIn('disabled',self.dialog.save_button.state())
+
+    def test_sku_name_choice_requires_selection_and_cancel_preserves_edits(self):
+        before=copy.deepcopy(self.dialog.model.rows)
+        conflict={'sku':'SAME-SKU','choices':[['FIRST','100 ML'],['SECOND','250 ML']]}
+        def choose():
+            dialog=next(w for w in self.dialog.winfo_children() if isinstance(w,tk.Toplevel))
+            frame=next(w for w in dialog.winfo_children() if isinstance(w,ttk.Frame))
+            combo=next(w for w in frame.winfo_children() if isinstance(w,ttk.Combobox))
+            actions=next(w for w in frame.winfo_children() if isinstance(w,ttk.Frame))
+            button=next(w for w in actions.winfo_children() if w.cget('text')=='Keep selected names')
+            button.invoke()
+            self.assertTrue(dialog.winfo_exists())
+            combo.current(1);button.invoke()
+        self.root.after(40,choose)
+        self.assertEqual(self.dialog.choose_sku_names(conflict),['SECOND','250 ML'])
+        def cancel():
+            dialog=next(w for w in self.dialog.winfo_children() if isinstance(w,tk.Toplevel))
+            dialog.destroy()
+        self.root.after(40,cancel)
+        self.assertIsNone(self.dialog.choose_sku_names(conflict))
+        self.assertEqual(self.dialog.model.rows,before)
+
     def test_attention_highlight_survives_selection_and_dirty_edits_take_priority(self):
         self.assertIn("attention", self.dialog.tree.item("partial", "tags"))
         self.assertIn("!", self.dialog.tree.item("partial", "text"))

@@ -718,7 +718,7 @@ class ProductsDialog(tk.Toplevel):
             self.save_button: editable, self.add_button: editable,
             self.edit_button: editable and len(selected) == 1,
             self.delete_button: editable and selected_unlocked,
-            self.export_button: editable, self.import_button: not self.busy and pending and not self.edit_locked,
+            self.export_button: not self.busy and not pending, self.import_button: not self.busy and pending,
             self.lock_button: not self.busy and not pending and not self.edit_locked,
             self.unlock_button: not self.busy and not pending and self.edit_locked,
             self.details_button: not self.busy and len(selected) == 1,
@@ -1058,7 +1058,7 @@ class ProductsDialog(tk.Toplevel):
         messagebox.showwarning("Check products", text, parent=self)
 
     def save_names(self, lock_all=True, on_saved=None, prepared_rows=None, priority=None):
-        if self.busy or self.edit_locked:
+        if self.busy or (self.edit_locked and prepared_rows is None):
             return False
         if self.excel is not None and prepared_rows is None:
             return False
@@ -1066,8 +1066,23 @@ class ProductsDialog(tk.Toplevel):
         priority = list(self.model.selection_order) if priority is None else priority
 
         def prepared(preview):
+            if preview.get("sku_conflicts"):
+                resolved = copy.deepcopy(preview["rows"])
+                for conflict in preview["sku_conflicts"]:
+                    choice = self.choose_sku_names(conflict)
+                    if choice is None:
+                        self.status_var.set("Save paused. Your edits are kept; no names have been saved.")
+                        return
+                    for row in resolved:
+                        if row["id"] in conflict["ids"]:
+                            row.update(zip(FIELDS[2:], choice))
+                self.save_names(lock_all=lock_all, on_saved=on_saved, prepared_rows=resolved, priority=priority)
+                return
             approvals = []
             for group in preview.get("merges", []):
+                if group.get("same_sku"):
+                    approvals.append(group["ids"])
+                    continue
                 text = ("These products have the same Product Name and Size:\n\n"
                         f"{group.get('alternative_product', '')}\n{group.get('alternative_variation', '')}\n\n"
                         f"Merge them and keep all {len(group.get('originals', []))} linked ecommerce originals and seller SKUs?\n\n"
@@ -1125,7 +1140,7 @@ class ProductsDialog(tk.Toplevel):
             self._poll_id = None
 
     def export_excel(self):
-        if self.busy or self.edit_locked or self.excel:
+        if self.busy or self.excel:
             return
 
         def begin(_saved):
@@ -1146,6 +1161,9 @@ class ProductsDialog(tk.Toplevel):
                 def opened(_unused):
                     self.status_var.set("Edit the Excel workbook. Keep it open, then click Apply Excel edits here. Locked rows stay protected.")
                     self._state()
+                    locked = sum(bool(row.get("locked")) for row in self.model.rows.values())
+                    if locked:
+                        messagebox.showinfo("Locked products", f"{locked:,} products are locked. Unlock them in Define Names before editing them in Excel.\n\nYou can edit the unlocked rows. Any changes to locked rows will be skipped when you apply Excel edits.", parent=self)
 
                 def failed(error):
                     self._work(session.close, lambda _r: reset(error), "Closing the unfinished Excel session…")
@@ -1155,16 +1173,58 @@ class ProductsDialog(tk.Toplevel):
                     self._state()
                     self._error(error)
                 self._work(session.open, opened, "Opening product names in Microsoft Excel…", failed)
-            self._engine({"action": "names_export", "path": str(self.excel.path)}, exported, "Preparing the Excel workbook…", on_error=export_failed)
-        self.save_names(lock_all=False, on_saved=begin)
+            self._engine({"action": "names_export", "path": str(self.excel.path), "rows": self.model.payload()}, exported, "Preparing the Excel workbook…", on_error=export_failed)
+        if self.edit_locked:
+            begin(None)
+        else:
+            self.save_names(lock_all=False, on_saved=begin)
+
+    def choose_sku_names(self, conflict):
+        """Choose one complete pair without discarding linked ecommerce rows."""
+        dialog = tk.Toplevel(self)
+        dialog.title("Merge names for one SKU")
+        dialog.transient(self)
+        dialog.configure(bg=PANEL)
+        frame = ttk.Frame(dialog, padding=22, style="Products.TFrame")
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text=f"SKU: {conflict['sku']}", style="Products.TLabel").pack(anchor="w")
+        ttk.Label(frame, text="These Excel rows belong to the same product. Choose the Product Name and Size to keep. All linked ecommerce names will be retained.", wraplength=670, style="Products.TLabel").pack(anchor="w", pady=14)
+        labels = [f"{name or '(use ecommerce name)'}  /  {size or '(use ecommerce variation)'}" for name, size in conflict["choices"]]
+        choice = ttk.Combobox(frame, values=labels, state="readonly", width=72, font=("Segoe UI", 11))
+        choice.pack(fill="x", pady=10)
+        result = []
+        def accept():
+            if choice.current() >= 0:
+                result.append(conflict["choices"][choice.current()])
+                dialog.destroy()
+        actions = ttk.Frame(frame, style="Products.TFrame")
+        actions.pack(fill="x", pady=(18, 0))
+        ttk.Button(actions, text="Cancel import", command=dialog.destroy, style="Products.TButton").pack(side="left")
+        ttk.Button(actions, text="Keep selected names", command=accept, style="Products.TButton").pack(side="right")
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+        dialog.grab_set()
+        choice.focus_set()
+        self.wait_window(dialog)
+        self.grab_set()
+        return result[0] if result else None
 
     def import_excel(self):
-        if self.busy or self.edit_locked or not self.excel:
+        if self.busy or not self.excel:
             return
         session = self.excel
+        sku_choices = {}
 
         def saved_excel(_result):
             def imported(preview):
+                if preview.get("sku_conflicts"):
+                    for conflict in preview["sku_conflicts"]:
+                        choice = self.choose_sku_names(conflict)
+                        if choice is None:
+                            self.status_var.set("Import paused. Your Excel edits are still open; no names have been saved.")
+                            return
+                        sku_choices[conflict["id"]] = choice
+                    check_excel()
+                    return
                 def saved(_result):
                     def finished(_unused):
                         self.excel = None
@@ -1172,10 +1232,18 @@ class ProductsDialog(tk.Toplevel):
                         text = f"Excel edits saved: {preview.get('added', 0)} added, {preview.get('updated', 0)} updated. Review rows stay unlocked."
                         if preview.get("separated"):
                             text += f" {preview['separated']} linked products separated."
+                        skipped = preview.get("skipped_locked", [])
+                        if skipped:
+                            text += f" {len(skipped)} locked Excel row(s) skipped. Unlock those products before editing."
                         self.status_var.set(text)
+                        if skipped:
+                            shown = ", ".join(map(str, skipped[:25])) + ("…" if len(skipped) > 25 else "")
+                            messagebox.showwarning("Unlocked edits saved; locked rows skipped", f"Changes to unlocked products were saved.\n\n{len(skipped)} locked Excel row(s) were left unchanged: {shown}\n\nUnlock those products in Define Names, then export again to edit them.", parent=self)
                     self._work(session.close, finished, "Finishing Excel import…")
                 self.save_names(prepared_rows=preview["rows"], priority=preview.get("priority", []), on_saved=saved)
-            self._engine({"action": "names_import", "path": str(session.path), "rows": self.model.payload()}, imported, "Checking Excel edits…")
+            def check_excel():
+                self._engine({"action": "names_import", "path": str(session.path), "rows": self.model.payload(), "sku_choices": sku_choices}, imported, "Checking Excel edits…")
+            check_excel()
 
         def failed(error):
             if str(error) == MISSING_EXCEL:

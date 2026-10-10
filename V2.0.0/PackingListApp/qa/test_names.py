@@ -129,7 +129,7 @@ class NameTests(unittest.TestCase):
         before = self.path.read_bytes()
         preview = names.import_excel(self.book, data['rows'])
         self.assertEqual(self.path.read_bytes(), before)
-        self.assertEqual((preview['added'], preview['updated']), (1, 2))
+        self.assertEqual((preview['added'], preview['updated']), (1, 1))
         saved = names.save_catalog(self.path, preview['rows'], data['revision'])
         updated = next(r for r in saved['rows'] if r['original_product'] == 'RENAMED ORIGINAL')
         self.assertEqual(updated['id'], data['rows'][0]['id'])

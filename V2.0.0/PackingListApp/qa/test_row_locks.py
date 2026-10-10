@@ -25,15 +25,38 @@ class RowLockTests(unittest.TestCase):
         names.export_excel(self.book,self.catalog)
         book=load_workbook(self.book);sheet=book['Names'];self.assertTrue(sheet.protection.sheet);self.assertTrue(sheet['A3'].protection.locked)
         sheet['A3']='CHANGED ALIAS';book.save(self.book);book.close()
-        with self.assertRaisesRegex(PackingError,'locked'):names.import_excel(self.book,self.catalog['rows'])
+        preview=names.import_excel(self.book,self.catalog['rows'])
+        self.assertEqual(preview['skipped_locked'],[3])
+        self.assertEqual(preview['rows'],self.catalog['rows'])
         self.assertEqual(names.load_catalog(self.path),self.catalog)
     def test_unchanged_locked_excel_round_trip(self):
         names.export_excel(self.book,self.catalog)
         self.assertEqual(names.import_excel(self.book,self.catalog['rows'])['rows'],self.catalog['rows'])
+    def test_mixed_import_saves_unlocked_edits_and_skips_locked_names_and_originals(self):
+        rows=copy.deepcopy(self.catalog['rows'])
+        rows.append(dict(id='unlocked',original_product='NEW PRODUCT',original_variation='250ML',alternative_product='',alternative_variation='',locked=False))
+        catalog=names.save_catalog(self.path,rows,self.catalog['revision'])
+        names.export_excel(self.book,catalog)
+        book=load_workbook(self.book);sheet=book['Names'];skipped=[]
+        for number in range(2,sheet.max_row+1):
+            if sheet.cell(number,5).value=='unlocked':
+                sheet.cell(number,3,'DEFINED PRODUCT');sheet.cell(number,4,'250 ML')
+            else:
+                sheet.cell(number,3,'FORBIDDEN');skipped.append(number)
+        book.save(self.book);book.close()
+        preview=names.import_excel(self.book,catalog['rows'])
+        self.assertEqual(preview['skipped_locked'],skipped)
+        self.assertEqual(preview['updated'],1)
+        saved=names.save_catalog(self.path,preview['rows'],catalog['revision'],lock_all=True)
+        by_id={r['id']:r for r in saved['rows']}
+        self.assertEqual(by_id[self.catalog['rows'][0]['id']],self.catalog['rows'][0])
+        self.assertEqual(by_id['unlocked']['alternative_product'],'DEFINED PRODUCT')
     def test_locked_linked_alternatives_cannot_be_split_in_excel(self):
         names.export_excel(self.book,self.catalog)
         book=load_workbook(self.book);sheet=book['Names'];sheet['C2']='FIRST';sheet['C3']='SECOND';book.save(self.book);book.close()
-        with self.assertRaisesRegex(PackingError,'locked'):names.import_excel(self.book,self.catalog['rows'])
+        preview=names.import_excel(self.book,self.catalog['rows'])
+        self.assertEqual(preview['skipped_locked'],[2,3])
+        self.assertEqual(preview['rows'],self.catalog['rows'])
         self.assertEqual(names.load_catalog(self.path),self.catalog)
     def test_locked_rows_not_offered_for_merges(self):
         rows=copy.deepcopy(self.catalog['rows']);row=copy.deepcopy(rows[0]);row['id']='other';row['original_product']='OTHER';row['aliases']=[];row['locked']=False;rows.append(row)

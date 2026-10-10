@@ -1,5 +1,10 @@
 Packing List Manager 2.0.0
 
+Excel import skips edits to locked rows and reports them while saving unlocked edits.
+Linked SKU rows remain together; choose one name and size if Excel edits disagree.
+Matching unlocked definitions for the same SKU merge when names are saved.
+Sharper parcel icon with native 20px and 40px sizes for 125% Windows scaling.
+
 Station Board interface: graphite gray/off-white, readable dividers and a loading bar.
 SKU-based Product Name and Size definitions with viewable ecommerce details.
 Review reminders and automatic unlocking for undefined or missing-SKU products.

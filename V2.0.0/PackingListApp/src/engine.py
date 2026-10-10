@@ -1041,8 +1041,8 @@ def handle(request):
         return {'ok': True, **catalog, 'name_attention': catalog_attention(catalog)}
     if action == 'names_prepare': return prepare_save(request['rows'], request.get('priority', []))
     if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []), lock_all=request.get('lock_all', False), unlocked_ids=request.get('unlocked_ids', []), review_source_issues=request.get('review_source_issues'))}
-    if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))
-    if action == 'names_import': return import_excel(Path(request['path']), request['rows'])
+    if action == 'names_export': return export_excel(Path(request['path']), {'rows': request['rows']} if 'rows' in request else load_catalog(catalog_path))
+    if action == 'names_import': return import_excel(Path(request['path']), request['rows'], request.get('sku_choices'))
     folder = dated_folder(request['folder'])
     if action == 'courier': return set_courier(folder, request['selected'], request['carrier'])
     if action == 'scan': return scan(folder, catalog_path)

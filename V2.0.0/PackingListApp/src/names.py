@@ -16,6 +16,9 @@ HEADERS = ('Ecommerce Name', 'Ecommerce Variation', 'Product Name', 'Size', 'Ent
 LEGACY_HEADERS = ('Original product name', 'Original variation', 'Alternative product name', 'Alternative variation')
 SKU_HEADERS = ('SKU', 'SKU metadata')
 SKU_FIELDS = ('sku', 'sku_aliases', 'ecommerce_sources')
+class SkuNameConflict(PackingError):
+    """Linked SKU names need one explicit choice before the import can finish."""
+
 ALLOWED_SYMBOLS = " -()/%.+,&'"
 
 
@@ -273,14 +276,26 @@ def prepare_save(rows, priority=()):
     validated = validate_rows(pending, allow_shared=True)
     rank = {identifier: index for index, identifier in enumerate(order)}
     groups = {}
+    sku_groups = {}
     for row in sorted(validated, key=lambda r: rank.get(r['id'], len(rank))):
         if not row.get('locked') and row['alternative_product'] and row['alternative_variation']:
             groups.setdefault((row['alternative_product'], row['alternative_variation']), []).append(row)
+            if row.get('sku'):
+                sku_groups.setdefault((row.get('sku_scope', ''), tuple(sorted(_canonical_skus(row)))), []).append(row)
+    conflicts = []
+    for group in sku_groups.values():
+        choices = list(dict.fromkeys(tuple(row[f] for f in FIELDS[2:]) for row in group))
+        if len(choices) > 1:
+            conflicts.append({'id': group[0]['id'], 'ids': [row['id'] for row in group],
+                              'sku': group[0]['sku'], 'choices': [list(pair) for pair in choices]})
     matches = [{'ids': [r['id'] for r in group], 'alternative_product': key[0], 'alternative_variation': key[1],
                 'base_product': group[0]['original_product'], 'base_variation': group[0]['original_variation'],
-                'originals': [source for row in group for source in source_pairs(row)]}
+                'originals': [source for row in group for source in source_pairs(row)],
+                'same_sku': bool(group[0].get('sku')) and all(
+                    _canonical_skus(row) == _canonical_skus(group[0]) and
+                    row.get('sku_scope', '') == group[0].get('sku_scope', '') for row in group)}
                for key, group in groups.items() if len(group) > 1]
-    return {'ok': True, 'rows': validated, 'merges': matches}
+    return {'ok': True, 'rows': validated, 'merges': matches, 'sku_conflicts': conflicts}
 
 
 def merge_rows(rows, groups):
@@ -626,7 +641,7 @@ def _split_identity(row, groups):
             # have two simultaneous internal names depending on an old title.
             ownership.setdefault(row['sku'], set()).add(index)
     if any(len(indices) > 1 for indices in ownership.values()):
-        raise PackingError('These linked ecommerce names use the same SKU. Keep one Product Name and Size for that SKU; a single changed value still updates all its linked names.')
+        raise SkuNameConflict('Choose one Product Name and Size for the linked SKU rows.')
     for sku in canonicals:
         ownership.setdefault(sku, {0})
     results = []
@@ -715,7 +730,7 @@ def export_excel(path, catalog):
     return {'ok': True, 'path': str(path), 'count': len(catalog['rows']), 'originals': number - 1}
 
 
-def import_excel(path, current_rows):
+def import_excel(path, current_rows, sku_choices=None):
     """Preview only: retain linked IDs and omitted originals; never save partial edits."""
     from openpyxl import load_workbook
     if path.suffix.lower() != '.xlsx':
@@ -732,6 +747,9 @@ def import_excel(path, current_rows):
     replacements, alt_edits, alternatives, additions, targets = {}, {}, {}, [], {}
     priority = []
     updated = set()
+    skipped_locked = []
+    sku_conflicts = []
+    sku_choices = sku_choices or {}
     repaired = 0
     reordered = False
     try:
@@ -824,14 +842,17 @@ def import_excel(path, current_rows):
                 if existing.get('locked'):
                     original = next(s for s in source_pairs(existing) if item_key(s['original_product'], s['original_variation']) == old_key)
                     if key != item_key(original['original_product'], original['original_variation']) or any(row[f] != existing[f] for f in FIELDS[2:]):
-                        raise PackingError(f'Excel row {number}: this definition is locked. Unlock it in Define Name before editing.')
+                        skipped_locked.append(number)
+                    continue
                 replacements[(target, old_key)] = {f: row[f] for f in FIELDS[:2]}
                 alternatives[(target, old_key)] = tuple(row[f] for f in FIELDS[2:])
                 for field in FIELDS[2:]:
                     if row[field] != existing[field]:
                         changes = alt_edits.setdefault((target, field), set())
                         changes.add(row[field])
-                updated.add(target)
+                original = next(s for s in source_pairs(existing) if item_key(s['original_product'], s['original_variation']) == old_key)
+                if any(row[f] != original[f] for f in FIELDS[:2]) or any(row[f] != existing[f] for f in FIELDS[2:]):
+                    updated.add(target)
         finally:
             wb.close()
     except PackingError:
@@ -854,7 +875,19 @@ def import_excel(path, current_rows):
             old_key = item_key(source['original_product'], source['original_variation'])
             values = alternatives.get((target, old_key), tuple(row[f] for f in FIELDS[2:])) if split else shared
             groups.setdefault(values, []).append((old_key, replacements.get((target, old_key), source)))
-        identities = _split_identity(row, list(groups.values()))
+        try:
+            identities = _split_identity(row, list(groups.values()))
+        except SkuNameConflict:
+            choices = list(groups)
+            selected = sku_choices.get(row['id'])
+            if selected is None:
+                sku_conflicts.append({'id': row['id'], 'sku': row['sku'],
+                                      'choices': [list(pair) for pair in choices]})
+                continue
+            if not isinstance(selected, list) or tuple(selected) not in choices:
+                raise PackingError('The Excel names changed. Review the SKU choices again.')
+            groups = {tuple(selected): [source for originals in groups.values() for source in originals]}
+            identities = _split_identity(row, list(groups.values()))
         for index, (values, originals) in enumerate(groups.items()):
             definition = dict(row, **originals[0][1])
             definition['aliases'] = [s for _, s in originals[1:]]
@@ -867,5 +900,8 @@ def import_excel(path, current_rows):
             imported.append(definition)
             for old_key, _ in originals:
                 routed[(target, old_key)] = definition['id']
+    if sku_conflicts:
+        # No saveable payload until every conflicting SKU has a user choice.
+        return {'ok': True, 'sku_conflicts': sku_conflicts, 'skipped_locked': skipped_locked}
     priority = [routed[p] if isinstance(p, tuple) else p for p in priority]
-    return {'ok': True, 'rows': validate_rows(imported + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated), 'separated': separated, 'repaired': repaired}
+    return {'ok': True, 'rows': validate_rows(imported + additions, allow_shared=True), 'priority': list(dict.fromkeys(priority)), 'added': len(additions), 'updated': len(updated), 'separated': separated, 'repaired': repaired, 'skipped_locked': skipped_locked}
