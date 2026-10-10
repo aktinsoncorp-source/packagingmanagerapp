@@ -7,5 +7,6 @@
 *.txt text eol=crlf
 *.manifest text eol=crlf
 *.docx binary
+*.pdf binary
 *.png binary
 *.ico binary
