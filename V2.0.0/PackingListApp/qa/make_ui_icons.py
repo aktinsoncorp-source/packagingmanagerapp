@@ -6,7 +6,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ASSETS = Path(__file__).resolve().parents[1] / "src" / "assets" / "ui"
 SCALE = 4
-INK, BLUE, TEAL, GRAY = "#292c31", "#4c4f54", "#006e65", "#777b80"
+INK, BLUE, TEAL, GRAY = "#24292c", "#42484b", "#006e65", "#6b767c"
 
 
 def render(name, size):
@@ -26,7 +26,7 @@ def render(name, size):
         state = name.removeprefix("check-")
         active = state in ("on", "mixed")
         color = "#bfc3c7" if active else GRAY if state == "disabled" else INK
-        fill = BLUE if active else "#fffdf7"
+        fill = BLUE if active else "#fcfcf9"
         draw.rounded_rectangle(box((2, 2, 22, 22)), radius=5*SCALE, fill=fill, outline=color, width=2*SCALE)
         if state == "on":
             stroke([(6.5, 12), (10.2, 15.7), (17.6, 8.2)], "white", 2.5)
@@ -36,7 +36,7 @@ def render(name, size):
         opened = "open" in name
         color = GRAY if "disabled" in name else TEAL if opened else INK
         if "header" in name:
-            color = "#48d1b6" if opened else "#fffaf0"
+            color = "#48d1b6" if opened else "#fcfcf9"
         # Both bodies share a baseline; the open shackle has a clear gap.
         if opened:
             draw.arc(box((12, 3, 30, 21)), 180, 360, fill=color, width=round(2.5*SCALE))
@@ -47,7 +47,7 @@ def render(name, size):
             stroke([(10.2, 10), (10.2, 17)], color, 2.5)
             stroke([(21.8, 10), (21.8, 17)], color, 2.5)
         draw.rounded_rectangle(box((5, 15, 27, 29)), radius=4*SCALE,
-                               fill="#4c4f54" if "header" in name else "#f8f4ec",
+                               fill=BLUE if "header" in name else "#fcfcf9",
                                outline=color, width=round(2.5*SCALE))
     return image.resize((size, size), Image.Resampling.LANCZOS)
 
@@ -56,7 +56,7 @@ def main():
     ASSETS.mkdir(parents=True, exist_ok=True)
     names = ("check-off", "check-on", "check-mixed", "check-disabled",
              "lock-closed", "lock-open", "lock-closed-disabled", "lock-open-disabled")
-    preview = Image.new("RGB", (760, 200), "#e9e3d8")
+    preview = Image.new("RGB", (760, 200), "#f1f2ef")
     draw = ImageDraw.Draw(preview)
     font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 15)
     for index, name in enumerate(names):

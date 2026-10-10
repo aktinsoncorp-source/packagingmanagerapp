@@ -20,15 +20,16 @@ from tkinter import font as tkfont
 
 VERSION = "2.0.0"
 DATA_DIR = Path(__file__).resolve().parents[2] / "Packing List Manager"
-BG = "#e9e3d8"
-INK = "#292c31"
-MUTED = "#555a61"
-BLUE = "#4c4f54"
-LINE = "#777b80"
-PANEL = "#f8f4ec"
-ROW = "#fffdf7"
-HEADER = "#4c4f54"
-SELECTED = "#cbd0d5"
+BG = "#f1f2ef"
+INK = "#24292c"
+MUTED = "#505b61"
+BLUE = "#42484b"
+LINE = "#6b767c"
+PANEL = "#fcfcf9"
+ROW = "#fcfcf9"
+HEADER = "#42484b"
+SELECTED = "#dce3e4"
+ALTERNATE = "#e6e9e6"
 PLATFORMS = ("SPX", "FLASH", "LAZADA", "TIKTOK", "SHOPEE")
 
 
@@ -89,43 +90,51 @@ def configure_styles(root):
     style.theme_use("clam")
     style.configure(".", font=("Segoe UI", 11), foreground=INK, background=BG)
     style.configure("App.TFrame", background=BG)
-    style.configure("Card.TFrame", background=PANEL, bordercolor=LINE, borderwidth=1, relief="solid")
+    style.configure("Card.TFrame", background=PANEL, bordercolor=HEADER, borderwidth=2, relief="solid")
+    style.configure("Paper.TFrame", background=PANEL)
     style.configure("TLabel", background=BG)
     style.configure("Card.TLabel", background=PANEL)
     style.configure("Muted.TLabel", foreground=MUTED)
     style.configure("CardMuted.TLabel", background=PANEL, foreground=MUTED, font=("Segoe UI", 10))
-    style.configure("Title.TLabel", font=("Segoe UI", 23, "bold"))
+    style.configure("Title.TLabel", font=("Segoe UI", 21, "bold"))
+    style.configure("Version.TLabel", foreground=MUTED, font=("Consolas", 9))
     style.configure("Section.TLabel", font=("Segoe UI", 13, "bold"))
     style.configure("CardHeading.TLabel", background=PANEL, font=("Segoe UI", 11, "bold"))
+    style.configure("RailHeading.TLabel", font=("Segoe UI", 10, "bold"))
+    style.configure("PaperSection.TLabel", background=PANEL, font=("Segoe UI", 13, "bold"))
     style.configure("TButton", padding=(12, 9), background=PANEL, bordercolor=LINE,
                     lightcolor=PANEL, darkcolor=PANEL, focuscolor=INK, borderwidth=1)
-    style.map("TButton", background=[("disabled", "#ded9d0"), ("active", "#ded6c7")],
-              foreground=[("disabled", "#666a70")], bordercolor=[("focus", INK)])
+    style.map("TButton", background=[("disabled", ALTERNATE), ("active", ALTERNATE)],
+              foreground=[("disabled", MUTED)], bordercolor=[("focus", INK)])
     style.configure("Primary.TButton", background=BLUE, foreground="white", bordercolor=BLUE,
                     font=("Segoe UI", 11, "bold"), padding=(16, 13), lightcolor=BLUE, darkcolor=BLUE)
-    style.map("Primary.TButton", background=[("disabled", "#ded9d0"), ("active", "#363a40")],
-              foreground=[("disabled", "#666a70"), ("!disabled", "white")])
+    style.map("Primary.TButton", background=[("disabled", ALTERNATE), ("active", "#30383d")],
+              foreground=[("disabled", MUTED), ("!disabled", "white")])
+    style.configure("Date.TButton", background=HEADER, foreground=PANEL, bordercolor=HEADER,
+                    lightcolor=HEADER, darkcolor=HEADER, font=("Consolas", 12, "bold"), padding=(12, 9))
+    style.map("Date.TButton", background=[("disabled", ALTERNATE), ("active", "#30383d")],
+              foreground=[("disabled", MUTED), ("!disabled", PANEL)])
     style.configure("Treeview", background=ROW, fieldbackground=ROW, rowheight=40,
                     borderwidth=1, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 11), foreground=INK, relief="solid")
-    style.configure("Treeview.Heading", background=HEADER, foreground="#fffaf0",
-                    font=("Segoe UI", 11, "bold"), padding=(7, 10), relief="raised", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+    style.configure("Treeview.Heading", background=HEADER, foreground=PANEL,
+                    font=("Segoe UI", 11, "bold"), padding=(7, 10), relief="flat", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
     style.map("Treeview", background=[("selected", SELECTED)], foreground=[("selected", INK)])
-    style.map("Treeview.Heading", background=[("active", "#363a40")])
+    style.map("Treeview.Heading", background=[("active", "#30383d")])
     style.configure("TEntry", padding=(5, 5), fieldbackground=ROW, foreground=INK, insertcolor=INK,
                     bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 11))
-    style.map("TEntry", fieldbackground=[("readonly", ROW), ("disabled", "#ded9d0")],
-              foreground=[("disabled", "#666a70")], bordercolor=[("focus", INK)])
+    style.map("TEntry", fieldbackground=[("readonly", ROW), ("disabled", ALTERNATE)],
+              foreground=[("disabled", MUTED)], bordercolor=[("focus", INK)])
     style.configure("TCombobox", padding=(4, 5), fieldbackground=ROW, background=PANEL, foreground=INK,
                     arrowcolor=INK, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
     style.map("TCombobox", fieldbackground=[("readonly", ROW)], foreground=[("readonly", INK)],
               selectbackground=[("readonly", SELECTED)], selectforeground=[("readonly", INK)])
     style.configure("TCheckbutton", background=BG, foreground=INK)
-    style.map("TCheckbutton", background=[("active", BG)], foreground=[("disabled", "#666a70")])
-    style.configure("TScrollbar", background="#b0aaa0", troughcolor=PANEL, arrowcolor=INK,
-                    bordercolor=LINE, lightcolor="#b0aaa0", darkcolor="#b0aaa0")
-    style.map("TScrollbar", background=[("active", "#8c8881")])
-    style.configure("Loading.Horizontal.TProgressbar", background=BLUE, troughcolor=PANEL,
-                    bordercolor=LINE, lightcolor=BLUE, darkcolor=BLUE, thickness=12)
+    style.map("TCheckbutton", background=[("active", BG)], foreground=[("disabled", MUTED)])
+    style.configure("TScrollbar", background="#b9c1c2", troughcolor=PANEL, arrowcolor=INK,
+                    bordercolor=LINE, lightcolor="#b9c1c2", darkcolor="#b9c1c2")
+    style.map("TScrollbar", background=[("active", "#909b9f")])
+    style.configure("Loading.Horizontal.TProgressbar", background=BLUE, troughcolor="#cbd1d0",
+                    borderwidth=0, lightcolor=BLUE, darkcolor=BLUE, thickness=12)
     return style
 
 
@@ -158,11 +167,11 @@ class RepeatWarning(tk.Toplevel):
         area.pack(fill="x", padx=60)
         self.no_button = tk.Button(area, text="No", command=lambda: self.choose("skip"),
                                    font=("Segoe UI", 12, "bold"), background=BLUE, foreground="white",
-                                   activebackground="#363a40", activeforeground="white", relief="flat",
+                                   activebackground="#30383d", activeforeground="white", relief="flat",
                                    height=2, cursor="hand2", default="active", bd=0)
         self.no_button.pack(fill="x")
         self.continue_link = tk.Label(area, text="Continue to Generate the Repeated Orders",
-                                      font=("Segoe UI", 12, "bold"), background=BG, foreground=INK, activebackground="#ded6c7", activeforeground=INK,
+                                      font=("Segoe UI", 12, "bold"), background=BG, foreground=INK, activebackground=ALTERNATE, activeforeground=INK,
                                       relief="flat", borderwidth=0, cursor="hand2", pady=12, takefocus=1)
         self.continue_link.pack(fill="x")
         self.continue_link.bind("<Button-1>", lambda event: self.choose("include"))
@@ -295,49 +304,76 @@ class PackingApp(tk.Tk):
         self.outer_panel = outer
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
-        outer.rowconfigure(3, weight=1)
+        outer.rowconfigure(2, weight=1)
+        icon_dir = Path(__file__).resolve().parent / "assets" / "ui"
+        self.nav_lock_icon = tk.PhotoImage(master=self, file=str(icon_dir / "lock-closed.png"))
+        self.nav_disabled_lock_icon = tk.PhotoImage(master=self, file=str(icon_dir / "lock-closed-disabled.png"))
         header = ttk.Frame(outer, style="App.TFrame")
         self.header_panel = header
         header.grid(row=0, column=0, sticky="ew", pady=(0, 17))
         header.columnconfigure(0, weight=1)
-        ttk.Label(header, text="Packing List Manager", style="Title.TLabel").grid(row=0, column=0, sticky="w")
-        self.subtitle = ttk.Label(header, text="Choose a date. Check the PDFs. Generate your packing lists.", style="Muted.TLabel")
-        self.subtitle.grid(row=1, column=0, sticky="w", pady=(2, 0))
-        self.products_button = self._button(header, "Products / Define Names", self.open_products)
+        self.subtitle = ttk.Label(header, text=f"V{VERSION}", style="Version.TLabel")
+        self.subtitle.grid(row=0, column=0, sticky="w", pady=(0, 3))
+        ttk.Label(header, text="PACKING LIST MANAGER", style="Title.TLabel").grid(row=1, column=0, sticky="w")
+        self.products_button = self._button(header, "Products / Define Names", self.open_products,
+                                          image=(self.nav_lock_icon, "disabled", self.nav_disabled_lock_icon), compound="left")
         self.products_button.grid(row=0, column=1, rowspan=2, padx=(12, 9))
-        self._button(header, "Help", self.show_help).grid(row=0, column=2, rowspan=2)
+        self._button(header, "Help", self.show_help, width=5).grid(row=0, column=2, rowspan=2)
+        self.header_rule = tk.Frame(header, background=HEADER, height=6)
+        self.header_rule.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(12, 0))
 
-        folder = ttk.Frame(outer, style="Card.TFrame", padding=(14, 11, 14, 10))
-        folder.grid(row=1, column=0, sticky="ew")
+        folder = ttk.Frame(outer, style="App.TFrame")
+        folder.grid(row=1, column=0, sticky="ew", pady=(0, 16))
+        self.folder_panel = folder
         folder.columnconfigure(0, weight=1)
-        ttk.Label(folder, text="Source folder", style="CardHeading.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
-        ttk.Label(folder, text="Packing date", style="CardHeading.TLabel").grid(row=0, column=2, sticky="w", padx=(26, 0), pady=(0, 6))
+        ttk.Label(folder, text="Source folder", font=("Segoe UI", 11, "bold")).grid(row=0, column=0, sticky="w", pady=(0, 6))
+        ttk.Label(folder, text="Packing date", font=("Segoe UI", 11, "bold")).grid(row=0, column=2, sticky="w", padx=(22, 0), pady=(0, 6))
         self.folder_var = tk.StringVar()
         self.folder_entry = ttk.Entry(folder, textvariable=self.folder_var, state="readonly", font=("Segoe UI", 11))
         self.folder_entry.grid(row=1, column=0, sticky="ew", padx=(0, 10))
-        self._button(folder, "Choose folder...", self.choose_folder).grid(row=1, column=1)
+        self._button(folder, "Choose folder", self.choose_folder).grid(row=1, column=1)
         self.date_var = tk.StringVar()
-        self.date_button = self._button(folder, "", self.choose_date, textvariable=self.date_var, width=17)
-        self.date_button.grid(row=1, column=2, padx=(26, 0))
+        self.date_button = self._button(folder, "", self.choose_date, textvariable=self.date_var, width=16)
+        self.date_button.configure(style="Date.TButton")
+        self.date_button.grid(row=1, column=2, padx=(22, 0))
         self.path_var = tk.StringVar()
-        self.path_label = ttk.Label(folder, textvariable=self.path_var, style="CardMuted.TLabel")
+        self.path_label = ttk.Label(folder, textvariable=self.path_var, style="Muted.TLabel", font=("Segoe UI", 10))
         self.path_label.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(7, 0))
         folder.bind("<Configure>", lambda event: self.path_label.configure(wraplength=max(300, event.width-35)))
 
-        heading = ttk.Frame(outer, style="App.TFrame")
+        body = ttk.Frame(outer, style="App.TFrame")
+        body.grid(row=2, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
+        body.columnconfigure(1, minsize=246)
+        body.rowconfigure(0, weight=1)
+        workspace = ttk.Frame(body, style="Card.TFrame", padding=1)
+        workspace.grid(row=0, column=0, sticky="nsew")
+        workspace.columnconfigure(0, weight=1)
+        workspace.rowconfigure(1, weight=1)
+        self.workspace_panel = workspace
+        rail = ttk.Frame(body, style="App.TFrame")
+        rail.grid(row=0, column=1, sticky="nsew", padx=(16, 0))
+        rail.columnconfigure(0, weight=1)
+        self.action_rail = rail
+
+        heading = ttk.Frame(workspace, style="Paper.TFrame", padding=(12, 10))
         self.files_heading = heading
-        heading.grid(row=2, column=0, sticky="ew", pady=(16, 9))
+        heading.grid(row=0, column=0, sticky="ew")
         heading.columnconfigure(0, weight=1)
         self.summary_var = tk.StringVar(value="Packing PDFs")
-        ttk.Label(heading, textvariable=self.summary_var, style="Section.TLabel").grid(row=0, column=0, sticky="w")
-        self._button(heading, "Refresh PDF list", self.scan).grid(row=0, column=1, padx=(10, 9))
-        self._button(heading, "Add PDFs...", self.add_pdfs).grid(row=0, column=2)
+        self.files_summary_label = ttk.Label(heading, textvariable=self.summary_var, style="PaperSection.TLabel", wraplength=330)
+        self.files_summary_label.grid(row=0, column=0, sticky="w")
+        self.refresh_button = self._button(heading, "Refresh", self.scan)
+        self.refresh_button.grid(row=0, column=1, padx=(10, 8))
+        self.add_button = self._button(heading, "Add PDFs", self.add_pdfs)
+        self.add_button.grid(row=0, column=2)
+        heading.bind("<Configure>", lambda event: self.files_summary_label.configure(
+            wraplength=max(140, event.width-self.refresh_button.winfo_reqwidth()-self.add_button.winfo_reqwidth()-50)))
 
-        files = ttk.Frame(outer, style="Card.TFrame")
-        files.grid(row=3, column=0, sticky="nsew")
+        files = ttk.Frame(workspace, style="Paper.TFrame")
+        files.grid(row=1, column=0, sticky="nsew")
         files.columnconfigure(0, weight=1)
         files.rowconfigure(0, weight=1)
-        icon_dir = Path(__file__).resolve().parent / "assets" / "ui"
         self.check_icons = {state: tk.PhotoImage(master=self, file=str(icon_dir / f"check-{state}.png"))
                             for state in ("off", "on", "mixed", "disabled")}
         # The native tree column supports images; omit its unused expand arrow.
@@ -353,22 +389,26 @@ class PackingApp(tk.Tk):
         self.tree = ttk.Treeview(files, columns=columns, show="tree headings", style="Files.Treeview", selectmode="browse", height=6)
         heading_font = tkfont.Font(self, font=("Segoe UI", 11, "bold"))
         for key, label, width, minimum, stretch in (
-            ("#0", "Use", 92, 92, False), ("platform", "Platform", 95, 82, False),
-            ("file", "PDF file", 335, 180, True), ("courier", "Courier", 94, 86, False),
-            ("orders", "Orders", 70, 62, False), ("status", "Status", 345, 220, True)):
+            ("#0", "Use", 90, 90, False), ("platform", "Platform", 95, 82, False),
+            ("file", "PDF file", 250, 140, True), ("courier", "Courier", 94, 86, False),
+            ("orders", "Orders", 70, 62, False), ("status", "Status", 230, 160, True)):
             if not stretch:
                 minimum = max(minimum, heading_font.measure(label) + 26)
                 width = max(width, minimum)
             self.tree.heading(key, text=label, anchor="center" if key == "#0" else "w", command=self.toggle_all if key == "#0" else lambda: None)
             self.tree.column(key, width=width, minwidth=minimum, stretch=stretch, anchor="center" if key in ("#0", "orders", "courier") else "w")
         self.tree.tag_configure("even", background=ROW)
-        self.tree.tag_configure("odd", background="#e5dfd4")
+        self.tree.tag_configure("odd", background=ALTERNATE)
         self.tree.tag_configure("issue", foreground="#843d0a")
-        self.tree.tag_configure("ready", foreground="#155238")
+        self.tree.tag_configure("ready", foreground=INK)
         self.tree.grid(row=0, column=0, sticky="nsew")
         scrollbar = ttk.Scrollbar(files, command=self.tree.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=scrollbar.set)
+        horizontal = ttk.Scrollbar(files, orient="horizontal", command=self.tree.xview)
+        horizontal.grid(row=1, column=0, columnspan=2, sticky="ew")
+        self.tree.configure(xscrollcommand=horizontal.set)
+        self.tree.bind("<Configure>", self._fit_file_columns, add="+")
         from products_ui import add_column_dividers
         self.refresh_file_dividers = add_column_dividers(self.tree, color=LINE)
         self.tree.bind("<Button-1>", self._tree_click)
@@ -378,45 +418,62 @@ class PackingApp(tk.Tk):
         self.tree.bind("<<TreeviewSelect>>", lambda event: self._refresh_selection())
         self.empty_label = ttk.Label(files, text="No packing PDFs for this date\nChoose the correct folder and date, or click Add PDFs.",
                                      style="CardMuted.TLabel", anchor="center", justify="center")
-        totals = tk.Frame(files, background="#d6cebf", padx=12, pady=8, highlightbackground=LINE, highlightthickness=1)
-        totals.grid(row=1, column=0, columnspan=2, sticky="ew")
+        totals = tk.Frame(files, background=ALTERNATE, padx=12, pady=8, highlightbackground=HEADER, highlightthickness=1)
+        totals.grid(row=2, column=0, columnspan=2, sticky="ew")
         self.totals_var = tk.StringVar()
         self.platform_totals_var = tk.StringVar()
-        tk.Label(totals, textvariable=self.totals_var, background="#d6cebf", foreground=INK,
+        tk.Label(totals, textvariable=self.totals_var, background=ALTERNATE, foreground=INK,
                  font=("Segoe UI", 11, "bold"), anchor="w").pack(fill="x")
-        tk.Label(totals, textvariable=self.platform_totals_var, background="#d6cebf", foreground=MUTED,
-                 font=("Segoe UI", 10), anchor="w").pack(fill="x", pady=(3, 0))
+        self.platform_totals_label = tk.Label(totals, textvariable=self.platform_totals_var, background=ALTERNATE, foreground=MUTED,
+                                             font=("Segoe UI", 10), anchor="w", justify="left", wraplength=650)
+        self.platform_totals_label.pack(fill="x", pady=(3, 0))
+        totals.bind("<Configure>", lambda event: self.platform_totals_label.configure(wraplength=max(200, event.width-28)))
 
-        actions = ttk.Frame(outer, style="App.TFrame")
-        actions.grid(row=4, column=0, sticky="ew", pady=(8, 9))
+        actions = ttk.Frame(workspace, style="Paper.TFrame", padding=(12, 10))
+        actions.grid(row=2, column=0, sticky="ew")
         actions.columnconfigure(3, weight=1)
         self.source_button = self._button(actions, "Open PDF", self.open_source)
         self.source_button.grid(row=0, column=0, padx=(0, 8))
         self.details_button = self._button(actions, "File details", self.file_details)
         self.details_button.grid(row=0, column=1, padx=(0, 8))
-        self.review_button = self._button(actions, "Review changed file...", self.review)
+        self.review_button = self._button(actions, "Review changed file", self.review)
         self.review_button.grid(row=0, column=2)
-        self.history_button = self._button(actions, "Completed documents", self.show_history)
-        self.history_button.grid(row=0, column=4, padx=(8, 8))
-        self._button(actions, "Open Output Folder", self.open_output).grid(row=0, column=5)
 
-        generate = ttk.Frame(outer, style="Card.TFrame", padding=12)
-        generate.grid(row=5, column=0, sticky="ew")
-        generate.columnconfigure(1, weight=1)
-        self.generate_button = self._button(generate, "Generate Packing Lists", self.generate, primary=True)
-        self.generate_button.grid(row=0, column=0, sticky="ns")
+        generate = ttk.Frame(rail, style="Card.TFrame", padding=12)
+        generate.grid(row=0, column=0, sticky="ew")
+        generate.columnconfigure(0, weight=1)
+        self.generate_panel = generate
+        self.create_heading = ttk.Label(generate, text="CREATE DOCUMENTS", style="CardHeading.TLabel")
+        self.create_heading.grid(row=0, column=0, sticky="w", pady=(0, 10))
+        self.generate_button = self._button(generate, "Generate\nPacking Lists", self.generate, primary=True)
+        self.generate_button.grid(row=1, column=0, sticky="ew")
         self.generate_hint = tk.StringVar()
-        ttk.Label(generate, textvariable=self.generate_hint, style="CardMuted.TLabel", justify="left").grid(row=0, column=1, sticky="w", padx=18)
+        self.generate_hint_label = ttk.Label(generate, textvariable=self.generate_hint, style="CardMuted.TLabel", justify="left", wraplength=205)
+        self.generate_hint_label.grid(row=2, column=0, sticky="w", pady=10)
         self.sales_button = self._button(generate, "Export Item Sales", self.export_sales)
-        self.sales_button.grid(row=0, column=2, sticky="ns")
+        self.sales_button.grid(row=3, column=0, sticky="ew")
+        saved = ttk.Frame(rail, style="App.TFrame")
+        self.saved_panel = saved
+        saved.grid(row=1, column=0, sticky="ew", pady=(15, 0))
+        saved.columnconfigure(0, weight=1)
+        self.saved_rule = tk.Frame(saved, background=HEADER, height=3)
+        self.saved_rule.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        self.saved_heading = ttk.Label(saved, text="SAVED DOCUMENTS", style="RailHeading.TLabel")
+        self.saved_heading.grid(row=1, column=0, sticky="w", pady=(0, 8))
+        self.history_button = self._button(saved, "Completed documents", self.show_history)
+        self.history_button.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        self.output_button = self._button(saved, "Open Output Folder", self.open_output)
+        self.output_button.grid(row=3, column=0, sticky="ew")
         footer = ttk.Frame(outer, style="App.TFrame")
-        footer.grid(row=6, column=0, sticky="ew", pady=(8, 0))
+        footer.grid(row=3, column=0, sticky="ew", pady=(12, 0))
         footer.columnconfigure(0, weight=1)
+        tk.Frame(footer, background=HEADER, height=2).grid(row=0, column=0, sticky="ew", pady=(0, 7))
         self.status_var = tk.StringVar(value="Ready")
         self.status_label = ttk.Label(footer, textvariable=self.status_var, style="Muted.TLabel", font=("Segoe UI", 9))
-        self.status_label.grid(row=0, column=0, sticky="ew")
+        self.status_label.grid(row=1, column=0, sticky="ew")
+        footer.bind("<Configure>", lambda event: self.status_label.configure(wraplength=max(300, event.width)))
         self.progress = ttk.Progressbar(footer, mode="indeterminate", style="Loading.Horizontal.TProgressbar")
-        self.progress.grid(row=1, column=0, sticky="ew", pady=(5, 0))
+        self.progress.grid(row=2, column=0, sticky="ew", pady=(5, 0))
         self.progress.grid_remove()
 
     def _responsive_layout(self, event=None):
@@ -426,15 +483,35 @@ class PackingApp(tk.Tk):
         if compact == self._compact:
             return
         self._compact = compact
-        self.outer_panel.configure(padding=(22, 10 if compact else 17, 22, 8 if compact else 12))
-        self.header_panel.grid_configure(pady=(0, 9 if compact else 17))
-        self.files_heading.grid_configure(pady=(8 if compact else 16, 7 if compact else 9))
+        self.outer_panel.configure(padding=(20, 10 if compact else 17, 20, 8 if compact else 12))
+        self.header_panel.grid_configure(pady=(0, 7 if compact else 17))
+        self.header_rule.grid_configure(pady=(6 if compact else 12, 0))
+        self.folder_panel.grid_configure(pady=(0, 6 if compact else 16))
+        self.files_heading.configure(padding=(12, 7 if compact else 10))
+        self.generate_panel.configure(padding=8 if compact else 12)
+        self.create_heading.grid_configure(pady=(0, 7 if compact else 10))
+        self.generate_button.configure(padding=(16, 10 if compact else 13))
+        self.generate_hint_label.grid_configure(pady=6 if compact else 10)
+        self.saved_panel.grid_configure(pady=(12 if compact else 15, 0))
+        self.saved_rule.grid_configure(pady=(0, 7 if compact else 10))
+        self.saved_heading.grid_configure(pady=(0, 6 if compact else 8))
+        self.history_button.grid_configure(pady=(0, 6 if compact else 8))
         if compact:
-            self.subtitle.grid_remove()
             self.path_label.grid_remove()
         else:
-            self.subtitle.grid()
             self.path_label.grid()
+        self._refresh_selection()
+
+    def _fit_file_columns(self, event=None):
+        """Keep headings visible; scroll only if the readable minima cannot fit."""
+        available = self.tree.winfo_width() - 4 - sum(
+            self.tree.column(key, "width") for key in ("#0", "platform", "courier", "orders"))
+        file_width = max(140, int(available * .55))
+        status_width = max(160, available-file_width)
+        if file_width+status_width > available and available >= 300:
+            file_width = available-status_width
+        self.tree.column("file", width=file_width)
+        self.tree.column("status", width=status_width)
 
     def _set_folder(self, path):
         try:
@@ -447,7 +524,7 @@ class PackingApp(tk.Tk):
 
     def _update_paths(self):
         self.folder_var.set(str(self.root_folder))
-        self.date_var.set(self.packing_date.strftime("%d %b %Y") + "  ▾")
+        self.date_var.set(self.packing_date.strftime("%d %b %Y").upper() + "  ▾")
         self.path_var.set("Reading: " + str(self.date_folder))
 
     def choose_folder(self):
@@ -633,7 +710,10 @@ class PackingApp(tk.Tk):
         orders = sum(value["orders"] for value in counts.values())
         self.totals_var.set(f"Selected: {pdfs} PDFs   |   {orders} distinct orders")
         self.platform_totals_var.set("     ".join(f'{platform}: {counts[platform]["pdfs"]} PDFs / {counts[platform]["orders"]} orders' for platform in PLATFORMS if platform in counts) or "Tick Use beside the PDFs you want to generate.")
-        self.generate_hint.set("A4 PDF packing lists\nSaved in this date's 000 Output folder" if pdfs else "Select a PDF above to begin.\nNew orders are selected automatically.")
+        if getattr(self, "_compact", False):
+            self.generate_hint.set("A4 PDF · 000 Output" if pdfs else "Tick Use beside a PDF.")
+        else:
+            self.generate_hint.set("A4 PDF · Selected orders\nSaved in 000 Output" if pdfs else "Select a PDF to begin.\nTick its Use checkbox.")
         eligible = {row["path"] for row in self.entries if can_select(row, self.revisions)}
         state = "on" if eligible and eligible <= self.checked else "mixed" if self.checked else "off"
         self.tree.heading("#0", image=self.check_icons[state])

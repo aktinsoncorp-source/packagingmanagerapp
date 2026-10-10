@@ -25,7 +25,8 @@ from PIL import Image, ImageTk
 FIELDS = ("original_product", "original_variation", "alternative_product", "alternative_variation")
 LABELS = {"sku": "SKU", "original_product": "Ecommerce Name", "original_variation": "Ecommerce Variation",
           "alternative_product": "Product Name", "alternative_variation": "Size"}
-BG, TEXT, MUTED, PRIMARY = "#e9e3d8", "#292c31", "#555a61", "#4c4f54"
+BG, TEXT, MUTED, PRIMARY = "#f1f2ef", "#24292c", "#505b61", "#42484b"
+PANEL, LINE, ALT, SELECTED = "#fcfcf9", "#6b767c", "#e6e9e6", "#dce3e4"
 MISSING_EXCEL = "Error: No file has been detected\nPlease do not exit excel file before clicking import"
 
 
@@ -279,7 +280,7 @@ class ExcelSession:
             pass
 
 
-def add_column_dividers(tree, color="#777b80"):
+def add_column_dividers(tree, color=LINE):
     """Add visible column boundaries without changing Treeview input or data.
 
     Call after assigning xscrollcommand so the existing scrollbar keeps working.
@@ -388,34 +389,40 @@ class ProductsDialog(tk.Toplevel):
         style.configure("Products.Muted.TLabel", background=BG, foreground=MUTED, font=("Segoe UI", 11))
         style.configure("Products.State.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 11, "bold"))
         style.configure("Products.Title.TLabel", background=BG, foreground=TEXT, font=("Segoe UI", 22, "bold"))
-        style.configure("Products.Treeview", font=("Segoe UI", 12), rowheight=46, background="#fffdf7", fieldbackground="#fffdf7", foreground=TEXT,
-                        borderwidth=2, relief="solid", bordercolor="#777b80", lightcolor="#777b80", darkcolor="#777b80")
+        style.configure("Products.Treeview", font=("Segoe UI", 12), rowheight=46, background=PANEL, fieldbackground=PANEL, foreground=TEXT,
+                        borderwidth=2, relief="solid", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
         # Paint selection with row tags so selecting a changed row keeps its
         # amber highlight instead of covering it with the theme's blue fill.
-        style.map("Products.Treeview", background=[("disabled", "#ded9d0")], foreground=[("disabled", "#666a70")])
-        style.configure("Products.Treeview.Heading", font=("Segoe UI", 11, "bold"), padding=(8, 10), background="#4c4f54", foreground="#fffaf0",
-                        borderwidth=2, relief="raised", bordercolor="#777b80", lightcolor="#777b80", darkcolor="#777b80")
-        style.map("Products.Treeview.Heading", background=[("active", "#363a40")])
-        style.configure("Products.TButton", padding=(12, 9), font=("Segoe UI", 11), foreground=TEXT, background="#f8f4ec", bordercolor="#777b80", lightcolor="#777b80", darkcolor="#777b80")
-        style.map("Products.TButton", background=[("disabled", "#ded9d0"), ("active", "#ded6c7")], foreground=[("disabled", "#666a70")])
+        style.map("Products.Treeview", background=[("disabled", ALT)], foreground=[("disabled", "#646e73")])
+        style.configure("Products.Treeview.Heading", font=("Segoe UI", 11, "bold"), padding=(8, 10), background=PRIMARY, foreground=PANEL,
+                        borderwidth=2, relief="flat", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+        style.map("Products.Treeview.Heading", background=[("active", "#30383d")])
+        style.configure("Products.TButton", padding=(12, 9), font=("Segoe UI", 11), foreground=TEXT, background=PANEL,
+                        borderwidth=1, relief="solid", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
+        style.map("Products.TButton", background=[("disabled", ALT), ("active", ALT)], foreground=[("disabled", "#646e73")])
+        style.configure("Products.TEntry", fieldbackground=PANEL, foreground=TEXT, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
         style.configure("Products.TCheckbutton", background=BG, foreground=TEXT, font=("Segoe UI", 11))
-        style.map("Products.TCheckbutton", background=[("active", BG)], foreground=[("disabled", "#666a70")])
-        style.configure("Products.Primary.TButton", padding=(14, 10), font=("Segoe UI", 12, "bold"), foreground="white", background=PRIMARY)
-        style.map("Products.Primary.TButton", background=[("disabled", "#ded9d0"), ("active", "#363a40")], foreground=[("disabled", "#666a70")])
-        style.configure("Loading.Horizontal.TProgressbar", background=PRIMARY, troughcolor="#f8f4ec",
-                        bordercolor="#777b80", lightcolor=PRIMARY, darkcolor=PRIMARY, thickness=12)
+        style.map("Products.TCheckbutton", background=[("active", BG)], foreground=[("disabled", "#646e73")])
+        style.configure("Products.Primary.TButton", padding=(14, 10), font=("Segoe UI", 12, "bold"), foreground=PANEL, background=PRIMARY,
+                        borderwidth=1, relief="solid", bordercolor=PRIMARY, lightcolor=PRIMARY, darkcolor=PRIMARY)
+        style.map("Products.Primary.TButton", background=[("disabled", ALT), ("active", "#30383d")], foreground=[("disabled", "#646e73")])
+        style.configure("Loading.Horizontal.TProgressbar", background=PRIMARY, troughcolor="#cbd1d0",
+                        bordercolor=LINE, lightcolor=PRIMARY, darkcolor=PRIMARY, thickness=12)
         outer = ttk.Frame(self, padding=20, style="Products.TFrame")
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(3, weight=1)
-        ttk.Label(outer, text="Products", style="Products.Title.TLabel").grid(row=0, column=0, sticky="w")
+        heading = ttk.Frame(outer, style="Products.TFrame")
+        heading.grid(row=0, column=0, sticky="ew")
+        ttk.Label(heading, text="Products", style="Products.Title.TLabel").pack(anchor="w")
+        tk.Frame(heading, height=4, background=PRIMARY).pack(fill="x", pady=(5, 3))
         ttk.Label(outer, text="The SKU keeps your inventory names the same when an ecommerce listing changes.\nProduct Name and Size are printed on packing lists. Blank fields keep the ecommerce text.", style="Products.TLabel").grid(row=1, column=0, sticky="w", pady=(3, 16))
         toolbar = ttk.Frame(outer, style="Products.TFrame")
         toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         toolbar.columnconfigure(1, weight=1)
         ttk.Label(toolbar, text="Find product", style="Products.TLabel").grid(row=0, column=0, padx=(0, 10))
         self.search_var = tk.StringVar()
-        self.search_entry = ttk.Entry(toolbar, textvariable=self.search_var, width=25, font=("Segoe UI", 12))
+        self.search_entry = ttk.Entry(toolbar, textvariable=self.search_var, width=25, font=("Segoe UI", 12), style="Products.TEntry")
         self.search_entry.grid(row=0, column=1, sticky="ew", padx=(0, 16))
         self.search_var.trace_add("write", lambda *_: self._refresh_rows())
         self.show_ecommerce = tk.BooleanVar(value=False)
@@ -441,9 +448,9 @@ class ProductsDialog(tk.Toplevel):
             self.tree.column(field, width=width, minwidth=140 if field.endswith("variation") else 220, stretch=True)
         self.tree.heading("details", text="Ecommerce Details", anchor="w")
         self.tree.column("details", width=180, minwidth=180, stretch=False)
-        self.tree.tag_configure("odd", background="#e5dfd4")
+        self.tree.tag_configure("odd", background=ALT)
         self.tree.tag_configure("dirty", background="#ffe599", foreground="#162334")
-        self.tree.tag_configure("selected", background="#cbd0d5", foreground=TEXT)
+        self.tree.tag_configure("selected", background=SELECTED, foreground=TEXT)
         self.tree.tag_configure("dirtyselected", background="#ffd966", foreground="#162334")
         self.tree.grid(row=0, column=0, sticky="nsew")
         vertical = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
@@ -486,7 +493,7 @@ class ProductsDialog(tk.Toplevel):
         self.export_button.pack(side="left", padx=(0, 8))
         self.import_button.pack(side="left", padx=(0, 8))
         self.delete_button.pack(side="left", padx=(0, 14))
-        ttk.Label(advanced, text="Yellow rows have unsaved changes.", style="Products.Muted.TLabel").pack(side="left")
+        ttk.Label(advanced, text="* Unsaved changes (yellow rows)", style="Products.Muted.TLabel").pack(side="left")
         self.status_var = tk.StringVar(value="Viewing products. Select a row to see Ecommerce Details, or use the open padlock above to edit.")
         self.status_label = ttk.Label(outer, textvariable=self.status_var, style="Products.Muted.TLabel", wraplength=1120)
         self.status_label.grid(row=7, column=0, sticky="ew")
@@ -571,7 +578,7 @@ class ProductsDialog(tk.Toplevel):
             return
         heading = tkfont.Font(self, font=("Segoe UI", 11, "bold"))
         body = tkfont.Font(self, font=("Segoe UI", 12))
-        row_number_width = max(106, body.measure("  " + str(max(1, len(self.model.rows))))+58)
+        row_number_width = max(106, body.measure("  " + str(max(1, len(self.model.rows))) + " *")+58)
         self.tree.column("#0", width=row_number_width, minwidth=row_number_width)
         details = max(180, heading.measure("Ecommerce Details")+20, body.measure("View details (999)")+18)
         size = max(145, heading.measure("Size ↑ Smallest")+18)
@@ -602,8 +609,9 @@ class ProductsDialog(tk.Toplevel):
             details_count = len(self.model.ecommerce_details(row))
             values = [row.get("sku") or "Needs SKU review", row.get("alternative_product", ""), row.get("alternative_variation", ""),
                       f"View details ({details_count})", row.get("original_product", ""), row.get("original_variation", "")]
-            tags = ("dirty",) if self.model.changed(identity) else (("odd",) if number % 2 == 0 else ())
-            self.tree.insert("", "end", iid=identity, text=f"  {number}", image=self.closed_icon if row.get("locked") else self.open_icon, values=values, tags=tags)
+            changed = self.model.changed(identity)
+            tags = ("dirty",) if changed else (("odd",) if number % 2 == 0 else ())
+            self.tree.insert("", "end", iid=identity, text=f"  {number}{' *' if changed else ''}", image=self.closed_icon if row.get("locked") else self.open_icon, values=values, tags=tags)
         self.tree.selection_set([identity for identity in selected if self.tree.exists(identity)])
         self.tree.yview_moveto(yview)
         for field in LABELS:
@@ -863,7 +871,7 @@ class ProductsDialog(tk.Toplevel):
         for field, label, width in (("platform", "Platform", 120), ("sku", "Seller SKU", 240), ("product", "Ecommerce Name", 470), ("variation", "Ecommerce Variation", 220)):
             tree.heading(field, text=label, command=lambda key=field: show_sorted(key))
             tree.column(field, width=width, minwidth=100)
-        tree.tag_configure("odd", background="#e5dfd4")
+        tree.tag_configure("odd", background=ALT)
 
         def populate():
             if tree.get_children():
@@ -879,7 +887,7 @@ class ProductsDialog(tk.Toplevel):
         horizontal.grid(row=1, column=0, sticky="ew")
         add_column_dividers(tree)
         full_text = tk.StringVar(value="Select a listing to read its full name and variation below.")
-        tree.tag_configure("selected", background="#cbd0d5", foreground=TEXT)
+        tree.tag_configure("selected", background=SELECTED, foreground=TEXT)
 
         def select_detail(_event=None):
             selected = tree.selection()

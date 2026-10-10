@@ -25,4 +25,6 @@ An unknown supplied SKU must not silently borrow a different SKU because titles 
 
 Run `python -m unittest discover -s qa -p "test_*.py" -v`. Inherited private-data checks accept `PACKING_TEST_DATA` pointing at the parent V1 workspace's `PackingListApp/qa/names-regression-fixtures`. `python src/app.py --self-test qa/ui-verification.json` checks the desktop workflow. `qa/verify_reference.py` uses an isolated dated copy to check immutable source records, SKU rename stability, real Office PDF layout and full-date sales totals.
 
+`python qa/verify_ui_layout.py` checks the Station Board interface at normal and 125% scaling, verifies checkbox/courier routing and animated loading, and saves local screenshots. It uses synthetic rows and does not write product settings or packing outputs.
+
 Keep work local. The checkpoint is on `codex/v2.0.0`; a verified bundle belongs in the workspace's `Git/v2.0.0`. No executable is built at this stage.

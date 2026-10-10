@@ -1,5 +1,6 @@
 # Packing list preferences
 
+- V2.0.0 uses the approved Station Board retro-modern interface: graphite gray and off-white, a strong masthead rule, a prominent packing date, and a right-side Create Documents / Saved Documents panel. Keep the version at 2.0.0 and preserve the Python source workflow.
 - V2.0.0 Flash packing documents use pastel yellow order and column headers and matching picking-summary headers/totals. SPX remains orange; Lazada/TikTok remain blue.
 - V2 accessibility uses readable larger text, strong table separators, and distinct smooth lock icons. Keep all main and Products controls visible at 125% display scaling on an 1100x688 window; lock and unsaved states must have cues beyond color alone.
 
