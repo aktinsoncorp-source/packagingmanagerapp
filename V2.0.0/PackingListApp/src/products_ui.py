@@ -45,10 +45,13 @@ def single_line(value: str, *, alternative: bool = False) -> str:
 
 def size_key(value: str):
     value = value or ""
-    match = re.search(r"(?<![\d.])(\d+(?:[.,]\d+)?)\s*(ML|KG|L|G)\b", value, re.I)
+    match = re.search(r"(?<![\d.])(\d+(?:[.,]\d+)?)\s*(ML|KG|GAL(?:LONS?)?|L(?:IT(?:ER|RE)?S?)?|G(?:RAMS?)?)\b", value, re.I)
     if match:
         try:
             number, unit = Decimal(match[1].replace(",", ".")), match[2].upper()
+            if unit.startswith("GAL"):
+                number, unit = number * Decimal("3.5"), "L"
+            unit = unit[0] if unit.startswith(("L", "G")) else unit
             return (0, 1 if unit.endswith("L") else 0, number * (1000 if unit in ("L", "KG") else 1), value.casefold())
         except InvalidOperation:
             pass

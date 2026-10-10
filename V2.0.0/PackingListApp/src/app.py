@@ -307,8 +307,12 @@ class PackingApp(tk.Tk):
         icon = Path(__file__).parent / "assets" / "packing-list-icon.ico"
         if icon.exists():
             try:
-                self.iconbitmap(default=str(icon))
-            except tk.TclError:
+                from PIL import Image, ImageTk
+                with Image.open(icon) as artwork:
+                    self._app_icons = [ImageTk.PhotoImage(artwork.ico.getimage(size), master=self)
+                                       for size in sorted(artwork.ico.sizes())]
+                self.iconphoto(True, *self._app_icons)
+            except (tk.TclError, OSError):
                 pass
         configure_styles(self)
         self.data_dir = Path(data_dir)

@@ -113,6 +113,17 @@ class ProductsModelTests(unittest.TestCase):
         self.assertLess(size_key("100G"), size_key("1KG"))
         self.assertLess(size_key("1KG"), size_key("30ML"))
 
+    def test_spelled_sizes_sort_numerically_in_both_directions(self):
+        for sizes in (["100 GRAMS", "250 GRAMS", "1 KG"], ["250 ML", "1 LIT", "3 LIT", "1 GAL", "4 LIT"],
+                      ["20 KG", "1 LIT", "1 GAL"]):
+            model = ProductsModel({"rows": [product(str(i), alternative_variation=size)
+                                           for i, size in enumerate(reversed(sizes))]})
+            before = copy.deepcopy(model.rows)
+            self.assertEqual([r["alternative_variation"] for r in model.sorted_rows()], sizes)
+            model.toggle_sort("alternative_variation")
+            self.assertEqual([r["alternative_variation"] for r in model.sorted_rows()], list(reversed(sizes)))
+            self.assertEqual(model.rows, before)
+
     def test_details_include_sources_legacy_links_and_unseen_seller_skus(self):
         row = product()
         row["sku_aliases"].append({"platform": "LAZADA", "sku": "OLD-ROSE-100"})

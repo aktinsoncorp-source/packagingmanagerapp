@@ -1,5 +1,7 @@
 # Packing list preferences
 
+- V2 size sorting recognizes GRAM/GRAMS and LIT/LITER/LITRE spellings alongside abbreviations. For this inventory, 1 GAL equals 3.5 liters for sorting only; keep weight and volume in separate unit families and preserve displayed names/sizes.
+
 - V2 setup defaults to C:\Program Files\Packing List Manager, supports reinstall/update in place, and requests administrator elevation only for setup. Installed app data lives in %LOCALAPPDATA%\Packing List Manager; preserve saved catalogs/settings on reinstall/uninstall and migrate existing V2 per-user data before falling back to V1 or bundled defaults. Portable/source copies retain local data. Keep V2.0.0 and the existing app/executable/folder names.
 
 - V2 Excel exports remain available in locked viewing mode and include every row. Warn that locked products must be unlocked in Define Names before editing. On import, preserve locked definitions and skip/report their changed Excel rows while applying valid unlocked edits. Repeated ecommerce rows for one SKU are normal: keep their links together, ask which complete Product Name/Size to retain only when edits conflict, and merge matching unlocked same-SKU definitions at save. Do not change or merge locked definitions automatically.
