@@ -28,7 +28,7 @@ class NameAttentionTests(unittest.TestCase):
     def tearDown(self):
         for child in self.app.winfo_children():
             if isinstance(child, (NameAttentionPrompt, ProductsDialog)):
-                child.destroy()
+                child._destroy() if isinstance(child, ProductsDialog) else child.destroy()
         self.app.busy = False
         self.app.close()
 
@@ -84,7 +84,7 @@ class NameAttentionTests(unittest.TestCase):
         self.assertFalse(button.winfo_viewable())
         self.assertIsNone(self.app._attention_timer)
 
-    def test_review_button_opens_only_current_affected_products_locked(self):
+    def test_review_button_opens_only_current_affected_products_ready_to_edit(self):
         self.app.name_scan_ids = {"sample"}
         self.app.engine_handler = lambda request: dict(ok=True, revision=1, rows=copy.deepcopy(ROWS))
         self.app._set_name_attention(REPORT)
@@ -92,7 +92,9 @@ class NameAttentionTests(unittest.TestCase):
         self.wait_for(lambda: any(isinstance(child, ProductsDialog) for child in self.app.winfo_children()))
         dialog = next(child for child in self.app.winfo_children() if isinstance(child, ProductsDialog))
         self.assertEqual(dialog.tree.get_children(), ("sample",))
-        self.assertTrue(dialog.model.rows["sample"]["locked"])
+        self.assertFalse(dialog.model.rows["sample"]["locked"])
+        self.assertFalse(dialog.edit_locked)
+        self.assertFalse(dialog.edit_button.instate(["disabled"]))
         self.assertIn("attentionselected", dialog.tree.item("sample", "tags"))
         dialog._destroy()
 

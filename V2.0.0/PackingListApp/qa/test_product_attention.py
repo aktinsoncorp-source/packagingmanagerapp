@@ -252,6 +252,61 @@ class ProductAttentionWorkflowTests(unittest.TestCase):
         self.assertEqual(scanned['name_scan_attention']['count'], 0)
         self.assertEqual(scanned['name_scan_ids'], ['known'])
 
+    def test_review_locks_persist_through_save_completion_and_excel_export(self):
+        from openpyxl import load_workbook
+        from products_ui import ProductsModel
+
+        rows = [definition('complete', 'PERF-COMPLETE-30ML', 'COMPLETE', '30 ML'),
+                definition('blank', 'TEST-AURORA-50ML', '', ''),
+                definition('partial', 'PERF-PARTIAL-30ML', 'PARTIAL', ''),
+                definition('no-sku', '', '', ''),
+                definition('source', 'PERF-SOURCE-30ML', 'SOURCE', '30 ML')]
+        for row in rows:
+            row['original_product'] = 'ECOMMERCE ' + row['id'].upper()
+        initial = names.save_catalog(self.catalog_path, rows, 0, lock_all=True)
+        issues = [dict(rows[-1], reasons=['missing_sku'], sources=[])]
+        model = ProductsModel(initial, issues)
+        self.assertEqual(model.unlocked_ids, {'blank', 'partial', 'no-sku', 'source'})
+
+        def save(lock_all=True):
+            result = engine.handle({'action': 'names_save', 'catalog_path': str(self.catalog_path),
+                                    'rows': model.payload(), 'revision': model.revision,
+                                    'lock_all': lock_all, 'unlocked_ids': sorted(model.unlocked_ids),
+                                    'review_source_issues': issues})
+            self.assertTrue(result['ok'])
+            persisted = names.load_catalog(self.catalog_path)
+            self.assertEqual(result['rows'], persisted['rows'])
+            model.load(result)
+            return {row['id']: row for row in persisted['rows']}
+
+        persisted = save()
+        self.assertEqual({key: row['locked'] for key, row in persisted.items()},
+                         {'complete': True, 'blank': False, 'partial': False,
+                          'no-sku': False, 'source': False})
+        model.edit('blank', {'alternative_product': 'AURORA PEARL', 'alternative_variation': '50 ML'})
+        persisted = save()
+        self.assertTrue(persisted['blank']['locked'])
+        self.assertNotIn('blank', {item['id'] for item in catalog_attention(
+            {'rows': list(persisted.values())}, issues)['items']})
+        self.assertFalse(persisted['source']['locked'])
+
+        model.set_lock('complete', False)
+        persisted = save(lock_all=False)
+        self.assertFalse(persisted['complete']['locked'])
+        self.assertTrue(persisted['blank']['locked'])
+        workbook_path = self.root / 'review-locks.xlsx'
+        engine.handle({'action': 'names_export', 'catalog_path': str(self.catalog_path),
+                       'path': str(workbook_path)})
+        workbook = load_workbook(workbook_path)
+        try:
+            worksheet = workbook['Names']
+            self.assertTrue(worksheet.protection.sheet)
+            for cells in worksheet.iter_rows(min_row=2):
+                expected = persisted[cells[4].value]['locked']
+                self.assertEqual([cell.protection.locked for cell in cells[:4]], [expected] * 4)
+        finally:
+            workbook.close()
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -371,7 +371,7 @@ def load_catalog(path):
         return _load(path)
 
 
-def save_catalog(path, rows, revision, merge_groups=(), lock_all=False, unlocked_ids=()):
+def save_catalog(path, rows, revision, merge_groups=(), lock_all=False, unlocked_ids=(), review_source_issues=None):
     if not isinstance(lock_all, bool):
         raise PackingError('Invalid save row-lock option.')
     if not isinstance(unlocked_ids, (list, tuple)) or any(not isinstance(i, str) for i in unlocked_ids):
@@ -416,6 +416,12 @@ def save_catalog(path, rows, revision, merge_groups=(), lock_all=False, unlocked
         if lock_all:
             for row in validated:
                 row['locked'] = True
+        if review_source_issues is not None:
+            from product_attention import catalog_attention
+            review_ids = {item['id'] for item in catalog_attention({'rows': validated}, review_source_issues)['items']}
+            for row in validated:
+                if row['id'] in review_ids:
+                    row['locked'] = False
         if current['rows'] != validated:
             current = {'schema': 3 if any(r.get('sku') for r in validated) else current['schema'], 'revision': revision + 1, 'rows': validated}
             _write(path, current)

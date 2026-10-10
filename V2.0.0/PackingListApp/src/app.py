@@ -1108,7 +1108,7 @@ class PackingApp(tk.Tk):
                 "Choose Generate Packing Lists to create A4 PDFs. Finished documents go into 000 Output inside the selected date. Existing documents are never overwritten.\n\n"
                 "If repeated orders are found, No generates only orders without an existing matching output. The continuation link includes earlier generated orders. Enter and Escape choose No.\n\n"
                 "Select a PDF and choose File details to inspect it. Changed files must be reviewed before they can be included.\n\n"
-                "Products / Define Names lets you link stable SKUs to the Product Name and Size used in your inventory. You can also inspect the Ecommerce Name and Ecommerce Variation underneath each SKU. Unlock before editing.\n\n"
+                "Products / Define Names lets you link stable SKUs to the Product Name and Size used in your inventory. You can also inspect the Ecommerce Name and Ecommerce Variation underneath each SKU. Review rows unlock automatically; completed products require explicit unlocking.\n\n"
                 "The flashing Review button highlights products in these PDFs with missing SKUs or standard names. You can choose Later and still generate; blank standard fields use the ecommerce text. Correct missing seller SKUs on the website and refresh with updated PDFs.\n\n"
                 "Completed documents shows the PDFs, orders and products recorded in each earlier document. Open Output Folder opens all generated documents together.\n\n"
                 "Export Item Sales creates an Excel quantity report for the entire selected date, regardless of the Use checkboxes. It does not mark orders processed.")

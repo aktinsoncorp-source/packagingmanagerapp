@@ -24,16 +24,18 @@ def product(identity="rose", **overrides):
 
 
 class ProductsModelTests(unittest.TestCase):
-    def test_open_locks_all_rows_without_mutating_catalog(self):
+    def test_open_unlocks_undefined_rows_without_mutating_catalog(self):
         rows = [product(), product("partial", alternative_variation=""), product("empty", alternative_product="", alternative_variation="", locked=True)]
         original = copy.deepcopy(rows)
         model = ProductsModel({"revision": 7, "rows": rows})
-        self.assertEqual([row["locked"] for row in model.rows.values()], [True, True, True])
+        self.assertEqual([row["locked"] for row in model.rows.values()], [True, False, False])
         self.assertEqual(rows, original)
         self.assertFalse(model.dirty)
         for identity in ("partial", "empty"):
-            with self.assertRaises(ValueError):
-                model.edit(identity, {"alternative_product": "CHANGE"})
+            model.edit(identity, {"alternative_product": "CHANGE"})
+            with self.assertRaisesRegex(ValueError, "stay unlocked"):
+                model.set_lock(identity, True)
+        self.assertEqual(model.unlocked_ids, {"partial", "empty"})
 
     def test_edit_retains_all_links_and_unknown_metadata(self):
         model = ProductsModel({"rows": [product()]})
@@ -160,10 +162,13 @@ class ProductsTkTests(unittest.TestCase):
         self.dialog._destroy()
         self.root.destroy()
 
-    def test_locked_on_open_search_details_and_global_row_lock_workflow(self):
-        self.assertTrue(self.dialog.edit_locked)
-        self.assertIn("disabled", self.dialog.save_button.state())
-        self.assertFalse(self.dialog.save_names())
+    def test_review_auto_unlock_search_and_completed_row_lock_workflow(self):
+        self.assertFalse(self.dialog.edit_locked)
+        self.assertNotIn("disabled", self.dialog.save_button.state())
+        self.assertFalse(self.dialog.set_row_locked("partial", True))
+        self.assertFalse(self.dialog.set_all_locks(True))
+        self.assertTrue(self.dialog.model.rows["rose"]["locked"])
+        self.assertFalse(self.dialog.model.rows["partial"]["locked"])
         self.assertEqual(tuple(self.dialog.tree.cget("displaycolumns")), ("sku", "alternative_product", "alternative_variation", "details"))
         self.dialog.search_var.set("earlier rose")
         self.root.update()
@@ -175,10 +180,12 @@ class ProductsTkTests(unittest.TestCase):
         self.assertIn("dirty", self.dialog.tree.item("rose", "tags"))
         self.assertFalse(self.dialog.set_edit_locked(True))
         self.dialog.save_names()
-        self.assertTrue(all(row["locked"] for row in self.dialog.model.rows.values()))
+        self.assertTrue(self.dialog.model.rows["rose"]["locked"])
+        self.assertFalse(self.dialog.model.rows["partial"]["locked"])
         self.assertFalse(self.dialog.model.dirty)
         self.assertTrue(self.dialog.set_edit_locked(True))
-        self.assertEqual(self.requests[-1]["unlocked_ids"], ["rose"])
+        self.assertEqual(self.requests[-1]["unlocked_ids"], ["partial", "rose"])
+        self.assertEqual(self.requests[-1]["review_source_issues"], [])
 
     def test_failed_save_keeps_edits_and_locks(self):
         self.dialog.set_edit_locked(False)
@@ -200,9 +207,9 @@ class ProductsTkTests(unittest.TestCase):
         self.dialog.tree.selection_set("partial")
         self.root.update()
         self.assertIn("attentionselected", self.dialog.tree.item("partial", "tags"))
-        self.assertTrue(self.dialog.model.rows["partial"]["locked"])
-        self.dialog.set_edit_locked(False)
-        self.dialog.set_row_locked("partial", False)
+        self.assertFalse(self.dialog.model.rows["partial"]["locked"])
+        self.dialog.model.edit("partial", {"alternative_product": "INVENTORY NAME"})
+        self.dialog._refresh_rows()
         self.root.update()
         self.assertIn("dirtyselected", self.dialog.tree.item("partial", "tags"))
         self.assertIn("! *", self.dialog.tree.item("partial", "text"))
@@ -216,8 +223,9 @@ class ProductsTkTests(unittest.TestCase):
                                      attention_only=True, source_issues=[issue])
         self.root.update()
         self.assertEqual(self.dialog.tree.get_children(), ("rose",))
-        self.assertTrue(self.dialog.edit_locked)
-        self.assertTrue(all(row["locked"] for row in self.dialog.model.rows.values()))
+        self.assertFalse(self.dialog.edit_locked)
+        self.assertFalse(self.dialog.model.rows["rose"]["locked"])
+        self.assertTrue(self.dialog.model.rows["complete-other"]["locked"])
         self.assertIn("SKU missing in PDF", self.dialog._attention_text("rose"))
         self.assertIn(("SHOPEE PDF", "Missing in PDF", "New ecommerce title", "100 ml"), self.dialog._details_for_row(self.dialog.model.rows["rose"]))
         self.assertIn("Generation stays available", self.dialog.info_var.get())
@@ -248,8 +256,9 @@ class ProductsTkTests(unittest.TestCase):
                                      call, attention_only=True, on_catalog_changed=saved.append)
         self.root.update()
         self.assertEqual(self.dialog.tree.get_children(), ("no-sku",))
-        self.dialog.set_edit_locked(False)
-        self.dialog.edit_selected(unlock=True)
+        self.assertFalse(self.dialog.edit_locked)
+        self.assertEqual(self.dialog.edit_button.cget("text"), "Edit selected")
+        self.dialog.edit_selected()
         self.root.update()
         edit = next(widget for widget in self.dialog.winfo_children() if isinstance(widget, tk.Toplevel))
         frame = next(widget for widget in edit.winfo_children() if isinstance(widget, ttk.Frame))
@@ -267,7 +276,8 @@ class ProductsTkTests(unittest.TestCase):
         self.assertEqual(len(saved), 1)
         row = self.dialog.model.rows["no-sku"]
         self.assertEqual((row["sku"], row["alternative_product"], row["alternative_variation"]), ("", "STANDARD ROSE", "100 ML"))
-        self.assertTrue(all(row["locked"] for row in self.dialog.model.rows.values()))
+        self.assertFalse(row["locked"])
+        self.assertTrue(self.dialog.model.rows["rose"]["locked"])
         self.assertEqual(self.dialog.attention_items["no-sku"]["reasons"], ["missing_sku"])
         self.assertFalse(self.dialog.model.dirty)
 
@@ -284,8 +294,9 @@ class ProductsTkTests(unittest.TestCase):
     @patch("tkinter.Misc.clipboard_clear")
     @patch("tkinter.Misc.clipboard_append")
     def test_locked_rows_can_copy_fields_and_visible_columns_without_edits(self, append, clear):
+        self.dialog.set_edit_locked(True)
         before = copy.deepcopy(self.dialog.model.rows)
-        self.assertTrue(all(row["locked"] for row in before.values()))
+        self.assertTrue(before["rose"]["locked"])
         self.dialog.tree.selection_set("rose")
         self.root.update()
         self.assertIn("disabled", self.dialog.edit_button.state())
@@ -310,6 +321,7 @@ class ProductsTkTests(unittest.TestCase):
     @patch("tkinter.Misc.clipboard_clear")
     @patch("tkinter.Misc.clipboard_append")
     def test_locked_row_details_stay_viewable_and_copyable(self, append, clear):
+        self.dialog.set_edit_locked(True)
         before = copy.deepcopy(self.dialog.model.rows)
         self.dialog.tree.selection_set("rose")
         self.root.update()
@@ -345,6 +357,7 @@ class ProductsTkTests(unittest.TestCase):
         self.root.deiconify()
         self.root.update()
         self.dialog = ProductsDialog(self.root, {"revision": 1, "rows": [product(str(index)) for index in range(1278)]}, call)
+        self.assertTrue(self.dialog.edit_locked)
         self.dialog.geometry("1100x688")
         self.root.update()
         for name in ("save_button", "edit_button", "add_button", "details_button", "close_button", "export_button", "import_button", "delete_button", "lock_button", "unlock_button", "search_entry", "ecommerce_check", "needs_names_check", "status_label"):

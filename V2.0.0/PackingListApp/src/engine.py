@@ -994,7 +994,7 @@ def handle(request):
         catalog = migrate_registry(catalog_path, registry) if registry is not None else load_catalog(catalog_path)
         return {'ok': True, **catalog, 'name_attention': catalog_attention(catalog)}
     if action == 'names_prepare': return prepare_save(request['rows'], request.get('priority', []))
-    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []), lock_all=request.get('lock_all', False), unlocked_ids=request.get('unlocked_ids', []))}
+    if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []), lock_all=request.get('lock_all', False), unlocked_ids=request.get('unlocked_ids', []), review_source_issues=request.get('review_source_issues'))}
     if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))
     if action == 'names_import': return import_excel(Path(request['path']), request['rows'])
     folder = dated_folder(request['folder'])

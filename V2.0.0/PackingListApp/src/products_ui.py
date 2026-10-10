@@ -58,7 +58,8 @@ def size_key(value: str):
 class ProductsModel:
     """Editable snapshots; all engine metadata survives UI edits and sorting."""
 
-    def __init__(self, catalog: dict):
+    def __init__(self, catalog: dict, source_issues=None):
+        self.source_issues = copy.deepcopy(source_issues or [])
         self.product_sort, self.size_sort = "alternative_product", "alternative_variation"
         self.product_desc, self.size_desc = False, False
         self.selection_order: list[str] = []
@@ -79,9 +80,18 @@ class ProductsModel:
             if opening:
                 row["locked"] = True
             self.rows[row["id"]] = row
+        self._source_review_ids = remap_attention_ids(
+            {"rows": self.source_issues}, {"rows": list(self.rows.values())},
+            [issue["id"] for issue in self.source_issues])
+        self.unlocked_ids = self.review_ids()
+        for identity in self.unlocked_ids:
+            self.rows[identity]["locked"] = False
         self.saved = copy.deepcopy(self.rows)
-        self.unlocked_ids: set[str] = set()
         self.selection_order = []
+
+    def review_ids(self):
+        return {identity for identity, row in self.rows.items()
+                if row_attention_reasons(row) or identity in self._source_review_ids}
 
     @property
     def dirty(self):
@@ -135,6 +145,8 @@ class ProductsModel:
 
     def set_lock(self, identity, locked):
         row = self.rows[identity]
+        if locked and (row_attention_reasons(row) or identity in self._source_review_ids):
+            raise ValueError("Products needing review stay unlocked. Define their Product Name and Size and correct any missing SKU first.")
         saved = self.saved.get(identity)
         if locked and saved and saved.get("locked"):
             before, after = copy.deepcopy(saved), copy.deepcopy(row)
@@ -346,13 +358,13 @@ class ProductsDialog(tk.Toplevel):
     def __init__(self, parent, catalog, call_engine, *, attention_only=False, source_issues=None, on_catalog_changed=None, attention_ids=None):
         super().__init__(parent)
         self.parent, self.call_engine = parent, call_engine
-        self.model = ProductsModel(catalog)
+        self.model = ProductsModel(catalog, source_issues)
         self.attention_only = attention_only
         self.attention_scope_ids = None if attention_ids is None else set(attention_ids)
         self.source_issues = copy.deepcopy(source_issues or [])
         self.on_catalog_changed = on_catalog_changed
         self.attention_items = {}
-        self.edit_locked, self.busy = True, False
+        self.edit_locked, self.busy = not bool(self.model.review_ids()), False
         self.excel = None
         self._results = queue.Queue()
         self._poll_id = None
@@ -511,8 +523,8 @@ class ProductsDialog(tk.Toplevel):
         self.import_button.pack(side="left", padx=(0, 8))
         self.delete_button.pack(side="left", padx=(0, 14))
         ttk.Label(advanced, text="* Unsaved changes (yellow rows)", style="Products.Muted.TLabel").pack(side="left")
-        self.status_var = tk.StringVar(value=("Define the highlighted products, or close this window to keep generating with ecommerce text."
-                                            if self.attention_only else "Viewing products. Ctrl+C or right-click copies names. Use the open padlock above to edit."))
+        self.status_var = tk.StringVar(value=("Review rows are unlocked. Select one and choose Edit selected. Completed products stay locked."
+                                            if not self.edit_locked else "Viewing products. Ctrl+C or right-click copies names. Use the open padlock above to edit."))
         self.status_label = ttk.Label(outer, textvariable=self.status_var, style="Products.Muted.TLabel", wraplength=1120)
         self.status_label.grid(row=7, column=0, sticky="ew")
         self.progress = ttk.Progressbar(outer, mode="indeterminate", style="Loading.Horizontal.TProgressbar")
@@ -664,7 +676,7 @@ class ProductsDialog(tk.Toplevel):
         if needs_names and self.attention_scope_ids is not None:
             rows = [row for row in rows if row["id"] in self.attention_scope_ids]
         scope = " for these PDFs" if self.attention_scope_ids is not None else " below"
-        self.info_var.set(f"! Define Product Name and Size{scope}. Unlock editing, then unlock a row.\nGeneration stays available. Add missing seller SKUs on your ecommerce website."
+        self.info_var.set(f"! Define Product Name and Size{scope}. Review rows are automatically unlocked.\nGeneration stays available. Add missing seller SKUs on your ecommerce website."
                           if needs_names else "SKU keeps your Product Name and Size linked when ecommerce text changes.\n! Amber rows need SKU, Product Name or Size. Blank fields print ecommerce text.")
         for number, row in enumerate(rows, 1):
             identity = row["id"]
@@ -805,7 +817,7 @@ class ProductsDialog(tk.Toplevel):
             return False
         self.edit_locked = locked
         self._state()
-        self.status_var.set("Viewing products. Use the open padlock above to edit." if locked else "Editing unlocked. Open a row padlock, then choose Edit selected. Save names locks all rows again.")
+        self.status_var.set("Viewing products. Use the open padlock above to edit." if locked else "Editing unlocked. Review rows are ready to edit. Save names locks completed products.")
         return True
 
     def set_row_locked(self, identity, locked):
@@ -818,7 +830,7 @@ class ProductsDialog(tk.Toplevel):
             self.status_var.set(str(exc))
             return False
         self._refresh_rows()
-        self.status_var.set("Row lock changed. Save names keeps your changes and locks all rows.")
+        self.status_var.set("Row lock changed. Save names locks completed products; review rows stay unlocked.")
         return True
 
     def set_all_locks(self, locked):
@@ -1070,14 +1082,15 @@ class ProductsDialog(tk.Toplevel):
                         {"rows": list(self.model.rows.values())}, result, self.attention_scope_ids)
                 self.model.load(result)
                 self._refresh()
-                self.status_var.set("Names saved. All product rows are locked." if lock_all else "Names saved. Explicit row unlocks are kept for Excel editing.")
+                self.status_var.set("Names saved. Completed products are locked; review rows stay unlocked." if lock_all else "Names saved. Explicit row unlocks are kept for Excel editing.")
                 if self.on_catalog_changed:
                     self.on_catalog_changed(result)
                 if on_saved:
                     on_saved(result)
 
             self._engine({"action": "names_save", "rows": preview["rows"], "revision": self.model.revision,
-                          "merge_groups": approvals, "lock_all": lock_all, "unlocked_ids": sorted(self.model.unlocked_ids)}, saved, "Saving product names…")
+                          "merge_groups": approvals, "lock_all": lock_all, "unlocked_ids": sorted(self.model.unlocked_ids),
+                          "review_source_issues": self.source_issues}, saved, "Saving product names…")
         self._engine({"action": "names_prepare", "rows": rows, "priority": priority}, prepared, "Checking product names…")
         return True
 
@@ -1156,7 +1169,7 @@ class ProductsDialog(tk.Toplevel):
                     def finished(_unused):
                         self.excel = None
                         self._state()
-                        text = f"Excel edits saved: {preview.get('added', 0)} added, {preview.get('updated', 0)} updated. All rows locked."
+                        text = f"Excel edits saved: {preview.get('added', 0)} added, {preview.get('updated', 0)} updated. Review rows stay unlocked."
                         if preview.get("separated"):
                             text += f" {preview['separated']} linked products separated."
                         self.status_var.set(text)
