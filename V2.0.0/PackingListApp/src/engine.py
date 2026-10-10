@@ -670,11 +670,19 @@ def scan(folder, catalog_path=None):
                 atomic_json(out / HISTORY, history)
     else:
         entries, batches, history = scan_internal(folder, registry)
+    from product_attention import catalog_attention, source_attention, source_definition_ids
+    catalog, source_issues, scan_ids = {'rows': []}, [], []
     if catalog_path is not None:
         from names import encounter
-        encounter(catalog_path, batches.values(), registry=registry)
+        catalog = encounter(catalog_path, batches.values(), registry=registry)
+        source_issues = source_attention(catalog, batches.values(), registry)
+        scan_ids = source_definition_ids(catalog, batches.values(), registry)
+    scan_id_set = set(scan_ids)
+    scan_catalog = {'rows': [row for row in catalog['rows'] if row['id'] in scan_id_set]}
     return {'ok': True, 'entries': entries, 'folder': str(folder), 'output_folder': str(out),
-            'outputs': completed_outputs(folder, history), 'version': VERSION}
+            'outputs': completed_outputs(folder, history), 'version': VERSION,
+            'name_attention': catalog_attention(catalog, source_issues), 'name_source_issues': source_issues,
+            'name_scan_attention': catalog_attention(scan_catalog, source_issues), 'name_scan_ids': scan_ids}
 
 
 def repeat_warning(selected, batches, history, output_format):
@@ -980,9 +988,11 @@ def handle(request):
     catalog_path = Path(request.get('catalog_path', default_root / 'ProductNames.json')).resolve()
     if action == 'names_list':
         from names import migrate_registry
+        from product_attention import catalog_attention
         from sku_registry import load_registry
         registry = load_registry(catalog_path)
-        return {'ok': True, **(migrate_registry(catalog_path, registry) if registry is not None else load_catalog(catalog_path))}
+        catalog = migrate_registry(catalog_path, registry) if registry is not None else load_catalog(catalog_path)
+        return {'ok': True, **catalog, 'name_attention': catalog_attention(catalog)}
     if action == 'names_prepare': return prepare_save(request['rows'], request.get('priority', []))
     if action == 'names_save': return {'ok': True, **save_catalog(catalog_path, request['rows'], request['revision'], request.get('merge_groups', []), lock_all=request.get('lock_all', False), unlocked_ids=request.get('unlocked_ids', []))}
     if action == 'names_export': return export_excel(Path(request['path']), load_catalog(catalog_path))

@@ -80,6 +80,17 @@ class ProductsModelTests(unittest.TestCase):
         self.assertEqual(model.sorted_rows("not present"), [])
         self.assertEqual(model.sorted_rows(needs_names=True), [])
 
+    def test_attention_filter_includes_missing_sku_even_with_finished_names(self):
+        model = ProductsModel({"rows": [product(), product("no-sku", sku=""), product("partial", alternative_variation="")]})
+        self.assertEqual({row["id"] for row in model.sorted_rows(needs_names=True)}, {"no-sku", "partial"})
+        self.assertEqual({row["id"] for row in model.sorted_rows(needs_names=True, attention_ids={"rose"})}, {"rose", "no-sku", "partial"})
+        before = copy.deepcopy(model.rows["no-sku"])
+        model.set_lock("no-sku", False)
+        model.edit("no-sku", {"sku": "", "alternative_product": "Standard rose", "alternative_variation": "100 ml"})
+        self.assertEqual(model.rows["no-sku"]["sku"], "")
+        self.assertEqual(model.rows["no-sku"]["alternative_product"], "STANDARD ROSE")
+        self.assertEqual(model.rows["no-sku"]["ecommerce_sources"], before["ecommerce_sources"])
+
     def test_sort_families_are_independent_and_preserve_edits(self):
         model = ProductsModel({"rows": [product("large", alternative_variation="1L"), product("small", alternative_variation="30ML"), product("middle", alternative_variation="100ML")]})
         self.assertEqual([r["id"] for r in model.sorted_rows()], ["small", "middle", "large"])
@@ -181,6 +192,85 @@ class ProductsTkTests(unittest.TestCase):
         self.assertTrue(self.dialog.model.dirty)
         self.assertFalse(self.dialog.busy)
 
+    def test_attention_highlight_survives_selection_and_dirty_edits_take_priority(self):
+        self.assertIn("attention", self.dialog.tree.item("partial", "tags"))
+        self.assertIn("!", self.dialog.tree.item("partial", "text"))
+        values = self.dialog.tree.item("partial", "values")
+        self.assertEqual(values[1:3], ("[Ecommerce] G. ROSE PERFUME", "[Ecommerce] 100ML"))
+        self.dialog.tree.selection_set("partial")
+        self.root.update()
+        self.assertIn("attentionselected", self.dialog.tree.item("partial", "tags"))
+        self.assertTrue(self.dialog.model.rows["partial"]["locked"])
+        self.dialog.set_edit_locked(False)
+        self.dialog.set_row_locked("partial", False)
+        self.root.update()
+        self.assertIn("dirtyselected", self.dialog.tree.item("partial", "tags"))
+        self.assertIn("! *", self.dialog.tree.item("partial", "text"))
+
+    def test_attention_only_includes_missing_pdf_sku_for_a_complete_saved_definition(self):
+        call = self.dialog.call_engine
+        self.dialog._destroy()
+        issue = {"id": "rose", "reasons": ["missing_sku"], "sources": [
+            {"path": "SPX/orders.pdf", "platform": "SHOPEE", "sku": "", "product": "New ecommerce title", "variation": "100 ml", "order_id": "ORDER-1"}]}
+        self.dialog = ProductsDialog(self.root, {"rows": [product(), product("complete-other")]}, call,
+                                     attention_only=True, source_issues=[issue])
+        self.root.update()
+        self.assertEqual(self.dialog.tree.get_children(), ("rose",))
+        self.assertTrue(self.dialog.edit_locked)
+        self.assertTrue(all(row["locked"] for row in self.dialog.model.rows.values()))
+        self.assertIn("SKU missing in PDF", self.dialog._attention_text("rose"))
+        self.assertIn(("SHOPEE PDF", "Missing in PDF", "New ecommerce title", "100 ml"), self.dialog._details_for_row(self.dialog.model.rows["rose"]))
+        self.assertIn("Generation stays available", self.dialog.info_var.get())
+        self.dialog.needs_names.set(False)
+        self.dialog._refresh_rows()
+        self.root.update()
+        self.assertEqual(len(self.dialog.tree.get_children()), 2)
+        self.assertIn("attentionselected", self.dialog.tree.item("rose", "tags"))
+
+    def test_current_pdf_attention_scope_hides_unrelated_catalog_deficiencies(self):
+        call = self.dialog.call_engine
+        self.dialog._destroy()
+        self.dialog = ProductsDialog(self.root, {"rows": [product("current", alternative_variation=""), product("old", sku="")]}, call,
+                                     attention_only=True, attention_ids=["current"])
+        self.root.update()
+        self.assertEqual(self.dialog.tree.get_children(), ("current",))
+        self.assertIn("! 1 need attention", self.dialog.count_var.get())
+        self.dialog.needs_names.set(False)
+        self.dialog._refresh_rows()
+        self.assertEqual(set(self.dialog.tree.get_children()), {"current", "old"})
+        self.assertIn("attention", self.dialog.tree.item("old", "tags"))
+
+    def test_no_sku_product_can_save_standard_fields_and_notify_parent_without_unlocking_others(self):
+        call = self.dialog.call_engine
+        self.dialog._destroy()
+        saved = []
+        self.dialog = ProductsDialog(self.root, {"rows": [product("no-sku", sku="", alternative_product="", alternative_variation=""), product()]},
+                                     call, attention_only=True, on_catalog_changed=saved.append)
+        self.root.update()
+        self.assertEqual(self.dialog.tree.get_children(), ("no-sku",))
+        self.dialog.set_edit_locked(False)
+        self.dialog.edit_selected(unlock=True)
+        self.root.update()
+        edit = next(widget for widget in self.dialog.winfo_children() if isinstance(widget, tk.Toplevel))
+        frame = next(widget for widget in edit.winfo_children() if isinstance(widget, ttk.Frame))
+        entries = {int(widget.grid_info()["row"]): widget for widget in frame.winfo_children() if isinstance(widget, ttk.Entry)}
+        self.assertEqual(entries[1].get(), "")
+        self.assertEqual(entries[4].get(), "G. ROSE PERFUME")
+        self.assertIn("readonly", entries[4].state())
+        entries[2].insert(0, "standard rose")
+        entries[3].insert(0, "100 ml")
+        actions = next(widget for widget in frame.winfo_children() if isinstance(widget, ttk.Frame))
+        next(widget for widget in actions.winfo_children() if widget.cget("text") == "Apply change").invoke()
+        self.root.update()
+        self.dialog.save_names()
+        self.root.update()
+        self.assertEqual(len(saved), 1)
+        row = self.dialog.model.rows["no-sku"]
+        self.assertEqual((row["sku"], row["alternative_product"], row["alternative_variation"]), ("", "STANDARD ROSE", "100 ML"))
+        self.assertTrue(all(row["locked"] for row in self.dialog.model.rows.values()))
+        self.assertEqual(self.dialog.attention_items["no-sku"]["reasons"], ["missing_sku"])
+        self.assertFalse(self.dialog.model.dirty)
+
     def test_pre_export_save_preserves_unlocks_and_hidden_rows(self):
         self.dialog.set_edit_locked(False)
         self.dialog.set_row_locked("rose", False)
@@ -257,7 +347,7 @@ class ProductsTkTests(unittest.TestCase):
         self.dialog = ProductsDialog(self.root, {"revision": 1, "rows": [product(str(index)) for index in range(1278)]}, call)
         self.dialog.geometry("1100x688")
         self.root.update()
-        for name in ("save_button", "edit_button", "add_button", "details_button", "close_button", "export_button", "import_button", "delete_button", "lock_button", "unlock_button", "search_entry", "ecommerce_check", "status_label"):
+        for name in ("save_button", "edit_button", "add_button", "details_button", "close_button", "export_button", "import_button", "delete_button", "lock_button", "unlock_button", "search_entry", "ecommerce_check", "needs_names_check", "status_label"):
             widget = getattr(self.dialog, name)
             x, y = widget.winfo_rootx()-self.dialog.winfo_rootx(), widget.winfo_rooty()-self.dialog.winfo_rooty()
             self.assertTrue(widget.winfo_viewable(), name)
@@ -267,6 +357,12 @@ class ProductsTkTests(unittest.TestCase):
             self.assertLessEqual(y+widget.winfo_height(), self.dialog.winfo_height(), name)
         self.assertEqual(self.dialog.tree.xview(), (0.0, 1.0))
         self.assertGreaterEqual(self.dialog.tree.winfo_height(), 150)
+        self.dialog.attention_scope_ids = {"0"}
+        self.dialog.needs_names.set(True)
+        self.dialog._refresh_rows()
+        self.root.update()
+        self.assertGreaterEqual(self.dialog.tree.winfo_height(), 150)
+        self.assertLessEqual(self.dialog.status_label.winfo_rooty()+self.dialog.status_label.winfo_height(), self.dialog.winfo_rooty()+self.dialog.winfo_height())
         self.dialog.show_ecommerce.set(True)
         self.dialog._display_columns()
         self.assertEqual(self.dialog.tree.cget("displaycolumns")[1], "original_product")

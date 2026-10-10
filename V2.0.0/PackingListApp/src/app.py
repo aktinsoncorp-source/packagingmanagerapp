@@ -114,6 +114,12 @@ def configure_styles(root):
                     lightcolor=HEADER, darkcolor=HEADER, font=("Consolas", 12, "bold"), padding=(12, 9))
     style.map("Date.TButton", background=[("disabled", ALTERNATE), ("active", "#30383d")],
               foreground=[("disabled", MUTED), ("!disabled", PANEL)])
+    for name, color in (("Attention", "#ffe2a0"), ("AttentionPulse", "#efbc58")):
+        style.configure(name + ".TButton", background=color, foreground=INK,
+                        bordercolor=INK, lightcolor=color, darkcolor=color,
+                        font=("Segoe UI", 11, "bold"), padding=(9, 9))
+        style.map(name + ".TButton", background=[("disabled", ALTERNATE), ("active", "#efbc58")],
+                  foreground=[("disabled", MUTED), ("!disabled", INK)])
     style.configure("Treeview", background=ROW, fieldbackground=ROW, rowheight=40,
                     borderwidth=1, bordercolor=LINE, lightcolor=LINE, darkcolor=LINE, font=("Segoe UI", 11), foreground=INK, relief="solid")
     style.configure("Treeview.Heading", background=HEADER, foreground=PANEL,
@@ -187,6 +193,48 @@ class RepeatWarning(tk.Toplevel):
     def choose(self, result):
         self.result = result
         self.destroy()
+
+
+class NameAttentionPrompt(tk.Toplevel):
+    """An advisory with an explicit Later path; packing remains available."""
+    def __init__(self, parent, report, review):
+        super().__init__(parent)
+        self.title("Products need attention")
+        self.configure(background=BG)
+        self.transient(parent)
+        self.resizable(False, False)
+        area = ttk.Frame(self, padding=24)
+        area.pack(fill="both", expand=True)
+        ttk.Label(area, text="Define these products", style="Section.TLabel").pack(anchor="w")
+        counts = []
+        if report.get("missing_name_count"):
+            counts.append(f'{report["missing_name_count"]} product(s) need a standard Product Name or Size.')
+        if report.get("missing_sku_count"):
+            counts.append(f'{report["missing_sku_count"]} product(s) have a missing or unusable SKU. Check the website listing and its PDF.')
+        ttk.Label(area, text="\n".join(counts), wraplength=555, justify="left").pack(fill="x", pady=(12, 10))
+        examples = [item.get("original_product") or item.get("sku") or "Unnamed product"
+                    for item in report.get("items", [])[:3]]
+        tk.Label(area, text="\n".join("!  " + text[:90] for text in examples),
+                 background="#ffe2a0", foreground=INK, font=("Segoe UI", 11, "bold"),
+                 justify="left", anchor="w", wraplength=535, padx=10, pady=10).pack(fill="x")
+        ttk.Label(area, text="You can define a Product Name and Size even without a SKU.\n\n"
+                  "Choose Later to keep packing. Any blank standard field will print its Ecommerce Name or Ecommerce Variation instead.",
+                  wraplength=555, justify="left").pack(fill="x", pady=(12, 16))
+        actions = ttk.Frame(area)
+        actions.pack(fill="x")
+        def open_names():
+            self.destroy()
+            review()
+        self.later_button = ttk.Button(actions, text="Later — keep packing", command=self.destroy)
+        self.later_button.pack(side="left")
+        self.review_button = ttk.Button(actions, text="Define now", style="Primary.TButton", command=open_names)
+        self.review_button.pack(side="right")
+        self.bind("<Escape>", lambda event: self.destroy())
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.update_idletasks()
+        center_window(self, parent, max(610, self.winfo_reqwidth()), self.winfo_reqheight()+4)
+        self.grab_set()
+        self.review_button.focus_set()
 
 
 class DateChooser(tk.Toplevel):
@@ -264,6 +312,11 @@ class PackingApp(tk.Tk):
         self.checked, self.revisions = set(), set()
         self.row_entries = {}
         self.buttons = []
+        self.name_attention = {"items": [], "count": 0}
+        self.name_source_issues, self.name_scan_ids = [], set()
+        self._attention_seen = set()
+        self._attention_timer = self._attention_prompt_timer = None
+        self._attention_bright = False
         self.root_folder = Path(__file__).resolve().parents[3]
         self.packing_date = date.today()
         try:
@@ -318,9 +371,13 @@ class PackingApp(tk.Tk):
         self.products_button = self._button(header, "Products / Define Names", self.open_products,
                                           image=(self.nav_lock_icon, "disabled", self.nav_disabled_lock_icon), compound="left")
         self.products_button.grid(row=0, column=1, rowspan=2, padx=(12, 9))
-        self._button(header, "Help", self.show_help, width=5).grid(row=0, column=2, rowspan=2)
+        self.attention_button = self._button(header, "! Review (0)", lambda: self.open_products(attention_only=True))
+        self.attention_button.configure(style="Attention.TButton")
+        self.attention_button.grid(row=0, column=2, rowspan=2, padx=(0, 9))
+        self.attention_button.grid_remove()
+        self._button(header, "Help", self.show_help, width=5).grid(row=0, column=3, rowspan=2)
         self.header_rule = tk.Frame(header, background=HEADER, height=6)
-        self.header_rule.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        self.header_rule.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(12, 0))
 
         folder = ttk.Frame(outer, style="App.TFrame")
         folder.grid(row=1, column=0, sticky="ew", pady=(0, 16))
@@ -615,11 +672,16 @@ class PackingApp(tk.Tk):
                 row["path"] in previous if previous is not None else row.get("status") in ("READY", "MISSING"))}
             self._populate_files(focus_path)
             self.status_var.set("New orders are checked automatically. Tick Use to include a PDF, or select a row for details." if self.entries else "No supported packing PDFs found. Check the folder and date, or use Add PDFs.")
+            self.name_source_issues = result.get("name_source_issues", [])
+            self.name_scan_ids = set(result.get("name_scan_ids", []))
+            self._set_name_attention(result.get("name_scan_attention", {"items": [], "count": 0}), prompt=after is None)
             if after:
                 after(result)
         def failed(exc):
             self.entries, self.outputs, self.checked, self.revisions = [], [], set(), set()
+            self.name_source_issues, self.name_scan_ids = [], set()
             self._populate_files()
+            self._set_name_attention({"items": [], "count": 0})
             self.show_error(exc)
         self.call_engine({"action": "scan"}, done, "Reading PDFs and checking completed documents...", failed)
 
@@ -900,10 +962,64 @@ class PackingApp(tk.Tk):
             self.open_path(result["path"])
         self.call_engine({"action": "sales_export"}, done, "Exporting item quantities for the full selected date...")
 
-    def open_products(self):
+    def _set_name_attention(self, report, prompt=False):
+        self.name_attention = report
+        for attribute in ("_attention_timer", "_attention_prompt_timer"):
+            timer = getattr(self, attribute)
+            if timer:
+                self.after_cancel(timer)
+                setattr(self, attribute, None)
+        self._attention_bright = False
+        self.attention_button.configure(style="Attention.TButton", text=f'! Review ({report.get("count", 0)})')
+        if report.get("count"):
+            self.attention_button.grid()
+            self._attention_timer = self.after(1000, self._pulse_attention)
+            if prompt:
+                self._attention_prompt_timer = self.after(150, self._prompt_name_attention)
+        else:
+            self.attention_button.grid_remove()
+
+    def _pulse_attention(self):
+        self._attention_timer = None
+        if not self.name_attention.get("count"):
+            return
+        self._attention_bright = not self._attention_bright if not self.busy and self.grab_current() is None else False
+        self.attention_button.configure(style="AttentionPulse.TButton" if self._attention_bright else "Attention.TButton")
+        self._attention_timer = self.after(1000, self._pulse_attention)
+
+    def _prompt_name_attention(self):
+        self._attention_prompt_timer = None
+        keys = {(str(self.date_folder), item["id"], reason)
+                for item in self.name_attention.get("items", []) for reason in item["reasons"]}
+        if not keys - self._attention_seen:
+            return
+        if self.busy or self.grab_current() is not None:
+            self._attention_prompt_timer = self.after(1000, self._prompt_name_attention)
+            return
+        self._attention_seen.update(keys)
+        NameAttentionPrompt(self, self.name_attention, lambda: self.open_products(attention_only=True))
+
+    def open_products(self, attention_only=False):
         def done(catalog):
             from products_ui import ProductsDialog
-            ProductsDialog(self, catalog, self.call_engine)
+            from product_attention import catalog_attention, remap_attention_ids
+            saved = False
+            def changed(result):
+                nonlocal saved, catalog
+                saved = True
+                self.name_scan_ids = remap_attention_ids(catalog, result, self.name_scan_ids)
+                catalog = result
+                report = catalog_attention({"rows": [row for row in result.get("rows", [])
+                                                    if row["id"] in self.name_scan_ids]}, self.name_source_issues)
+                self._set_name_attention(report)
+            dialog = ProductsDialog(self, catalog, self.call_engine, attention_only=attention_only,
+                                    source_issues=self.name_source_issues,
+                                    attention_ids=self.name_scan_ids if attention_only else None,
+                                    on_catalog_changed=changed)
+            def closed(event):
+                if event.widget is dialog and saved:
+                    self.after_idle(lambda: self.scan(preserve=True))
+            dialog.bind("<Destroy>", closed, add="+")
         self.call_engine({"action": "names_list"}, done, "Loading products and SKU links...")
 
     def show_history(self):
@@ -993,6 +1109,7 @@ class PackingApp(tk.Tk):
                 "If repeated orders are found, No generates only orders without an existing matching output. The continuation link includes earlier generated orders. Enter and Escape choose No.\n\n"
                 "Select a PDF and choose File details to inspect it. Changed files must be reviewed before they can be included.\n\n"
                 "Products / Define Names lets you link stable SKUs to the Product Name and Size used in your inventory. You can also inspect the Ecommerce Name and Ecommerce Variation underneath each SKU. Unlock before editing.\n\n"
+                "The flashing Review button highlights products in these PDFs with missing SKUs or standard names. You can choose Later and still generate; blank standard fields use the ecommerce text. Correct missing seller SKUs on the website and refresh with updated PDFs.\n\n"
                 "Completed documents shows the PDFs, orders and products recorded in each earlier document. Open Output Folder opens all generated documents together.\n\n"
                 "Export Item Sales creates an Excel quantity report for the entire selected date, regardless of the Use checkboxes. It does not mark orders processed.")
         self._text_dialog("Packing List Manager help", "Your daily packing workflow", text)
@@ -1004,6 +1121,9 @@ class PackingApp(tk.Tk):
         self.executor.shutdown(wait=False, cancel_futures=True)
         if getattr(self, "_poll_id", None):
             self.after_cancel(self._poll_id)
+        for timer in (self._attention_timer, self._attention_prompt_timer):
+            if timer:
+                self.after_cancel(timer)
         self.destroy()
 
 

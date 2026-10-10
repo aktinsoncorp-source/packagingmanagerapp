@@ -7,6 +7,7 @@
 - V2.0.0 development lives separately in `V2.0.0` on branch `codex/v2.0.0`. Keep it runnable Python source until packaging is explicitly requested. Preserve the existing V1 application.
 - For V2, Shopee is the master for SKU identities and ecommerce descriptions. Use the updated local catalogs and preserve historical Lazada seller-SKU aliases. Never edit Lazada product names in its upload workbook.
 - V2 Define Names uses SKU as identity; internal fields are Product Name and Size. Ecommerce Name and Ecommerce Variation remain viewable as linked source evidence. Ecommerce name changes must not break a SKU's saved inventory names. Preserve earlier alternatives, row IDs, locks, original fingerprints, and audit snapshots.
+- V2 warns about missing/unusable source SKUs or blank Product Name/Size in the selected date's PDFs. Show highlighted definitions and a slow flashing Review button beside Define Names after dismissal; keep generation available with independent ecommerce fallback for blank standard fields. Existing no-SKU definitions can receive standard names without inventing a SKU. Retain missing-source-SKU reminders until corrected PDFs are scanned, and keep rows locked until explicitly unlocked.
 
 - Always use A4 paper for packing lists.
 - Use one clearly separated bordered table per order. Show the Order ID once as the table header and keep all products for that order underneath it.

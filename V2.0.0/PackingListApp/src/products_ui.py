@@ -21,6 +21,8 @@ import uuid
 
 from PIL import Image, ImageTk
 
+from product_attention import catalog_attention, row_attention_reasons, remap_attention_ids
+
 
 FIELDS = ("original_product", "original_variation", "alternative_product", "alternative_variation")
 LABELS = {"sku": "SKU", "original_product": "Ecommerce Name", "original_variation": "Ecommerce Variation",
@@ -104,11 +106,11 @@ class ProductsModel:
         following = (("smallest to largest" if desc else "largest to smallest") if size else ("A-Z" if desc else "Z-A")) if active else current
         return f"{LABELS[field]}: {'sorted ' + current + '. ' if active else ''}Click for {following}. The other sort stays unchanged."
 
-    def sorted_rows(self, query="", needs_names=False):
+    def sorted_rows(self, query="", needs_names=False, attention_ids=()):
         query = query.strip().casefold()
 
         def matches(row):
-            if needs_names and row.get("alternative_product", "").strip() and row.get("alternative_variation", "").strip():
+            if needs_names and not row_attention_reasons(row) and row.get("id") not in attention_ids:
                 return False
             if not query:
                 return True
@@ -341,10 +343,15 @@ def add_column_dividers(tree, color=LINE):
 class ProductsDialog(tk.Toplevel):
     """Modal editor. call_engine(request, on_success, message, on_error=None)."""
 
-    def __init__(self, parent, catalog, call_engine):
+    def __init__(self, parent, catalog, call_engine, *, attention_only=False, source_issues=None, on_catalog_changed=None, attention_ids=None):
         super().__init__(parent)
         self.parent, self.call_engine = parent, call_engine
         self.model = ProductsModel(catalog)
+        self.attention_only = attention_only
+        self.attention_scope_ids = None if attention_ids is None else set(attention_ids)
+        self.source_issues = copy.deepcopy(source_issues or [])
+        self.on_catalog_changed = on_catalog_changed
+        self.attention_items = {}
         self.edit_locked, self.busy = True, False
         self.excel = None
         self._results = queue.Queue()
@@ -363,6 +370,8 @@ class ProductsDialog(tk.Toplevel):
         self.both_icons = self._both_lock_icons()
         self._build()
         self._refresh()
+        if attention_only and self.tree.get_children():
+            self.tree.selection_set(self.tree.get_children()[0])
         self.grab_set()
         self.search_entry.focus_set()
         self._poll_id = self.after(70, self._poll_workers)
@@ -392,7 +401,7 @@ class ProductsDialog(tk.Toplevel):
         style.configure("Products.Treeview", font=("Segoe UI", 12), rowheight=46, background=PANEL, fieldbackground=PANEL, foreground=TEXT,
                         borderwidth=2, relief="solid", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
         # Paint selection with row tags so selecting a changed row keeps its
-        # amber highlight instead of covering it with the theme's blue fill.
+        # yellow highlight instead of covering it with the theme's blue fill.
         style.map("Products.Treeview", background=[("disabled", ALT)], foreground=[("disabled", "#646e73")])
         style.configure("Products.Treeview.Heading", font=("Segoe UI", 11, "bold"), padding=(8, 10), background=PRIMARY, foreground=PANEL,
                         borderwidth=2, relief="flat", bordercolor=LINE, lightcolor=LINE, darkcolor=LINE)
@@ -416,7 +425,9 @@ class ProductsDialog(tk.Toplevel):
         heading.grid(row=0, column=0, sticky="ew")
         ttk.Label(heading, text="Products", style="Products.Title.TLabel").pack(anchor="w")
         tk.Frame(heading, height=4, background=PRIMARY).pack(fill="x", pady=(5, 3))
-        ttk.Label(outer, text="The SKU keeps your inventory names the same when an ecommerce listing changes.\nProduct Name and Size are printed on packing lists. Blank fields keep the ecommerce text.", style="Products.TLabel").grid(row=1, column=0, sticky="w", pady=(3, 16))
+        self.info_var = tk.StringVar()
+        self.info_label = ttk.Label(outer, textvariable=self.info_var, style="Products.TLabel", wraplength=1120)
+        self.info_label.grid(row=1, column=0, sticky="ew", pady=(3, 16))
         toolbar = ttk.Frame(outer, style="Products.TFrame")
         toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         toolbar.columnconfigure(1, weight=1)
@@ -452,6 +463,8 @@ class ProductsDialog(tk.Toplevel):
         self.tree.tag_configure("dirty", background="#ffe599", foreground="#162334")
         self.tree.tag_configure("selected", background=SELECTED, foreground=TEXT)
         self.tree.tag_configure("dirtyselected", background="#ffd966", foreground="#162334")
+        self.tree.tag_configure("attention", background="#f6d6ae", foreground="#39250c")
+        self.tree.tag_configure("attentionselected", background="#e8bb87", foreground="#39250c")
         self.tree.grid(row=0, column=0, sticky="nsew")
         vertical = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
         horizontal = ttk.Scrollbar(table, orient="horizontal", command=self.tree.xview)
@@ -474,8 +487,9 @@ class ProductsDialog(tk.Toplevel):
         under.columnconfigure(0, weight=1)
         self.count_var = tk.StringVar()
         ttk.Label(under, textvariable=self.count_var, style="Products.Muted.TLabel").grid(row=0, column=0, sticky="w")
-        self.needs_names = tk.BooleanVar(value=False)
-        ttk.Checkbutton(under, text="Needs Product Name or Size", variable=self.needs_names, command=self._refresh_rows, style="Products.TCheckbutton").grid(row=0, column=1, sticky="e")
+        self.needs_names = tk.BooleanVar(value=self.attention_only)
+        self.needs_names_check = ttk.Checkbutton(under, text="Needs SKU, Name or Size", variable=self.needs_names, command=self._refresh_rows, style="Products.TCheckbutton")
+        self.needs_names_check.grid(row=0, column=1, sticky="e")
         actions = ttk.Frame(outer, style="Products.TFrame")
         actions.grid(row=5, column=0, sticky="ew", pady=(8, 8))
         self.save_button = ttk.Button(actions, text="Save names", command=self.save_names, style="Products.Primary.TButton")
@@ -497,14 +511,47 @@ class ProductsDialog(tk.Toplevel):
         self.import_button.pack(side="left", padx=(0, 8))
         self.delete_button.pack(side="left", padx=(0, 14))
         ttk.Label(advanced, text="* Unsaved changes (yellow rows)", style="Products.Muted.TLabel").pack(side="left")
-        self.status_var = tk.StringVar(value="Viewing products. Ctrl+C or right-click copies names. Use the open padlock above to edit.")
+        self.status_var = tk.StringVar(value=("Define the highlighted products, or close this window to keep generating with ecommerce text."
+                                            if self.attention_only else "Viewing products. Ctrl+C or right-click copies names. Use the open padlock above to edit."))
         self.status_label = ttk.Label(outer, textvariable=self.status_var, style="Products.Muted.TLabel", wraplength=1120)
         self.status_label.grid(row=7, column=0, sticky="ew")
         self.progress = ttk.Progressbar(outer, mode="indeterminate", style="Loading.Horizontal.TProgressbar")
         self.progress.grid(row=8, column=0, sticky="ew", pady=(5, 0))
         self.progress.grid_remove()
-        self.bind("<Configure>", lambda e: self.status_label.configure(wraplength=max(850, self.winfo_width()-60)) if e.widget is self else None)
+        self.bind("<Configure>", self._resize_notes)
         self._display_columns()
+
+    def _resize_notes(self, event):
+        if event.widget is self:
+            width = max(850, self.winfo_width()-60)
+            self.status_label.configure(wraplength=width)
+            self.info_label.configure(wraplength=width)
+
+    def _attention_text(self, identity):
+        row = self.model.rows[identity]
+        reasons = self.attention_items.get(identity, {}).get("reasons", [])
+        sku_issue = "SKU missing or needs correction" if "missing_sku" in row_attention_reasons(row) else "SKU missing in PDF"
+        labels = {"missing_sku": sku_issue,
+                  "missing_product_name": "Product Name missing", "missing_size": "Size missing"}
+        return "; ".join(labels[reason] for reason in reasons if reason in labels)
+
+    def _details_for_row(self, row):
+        details = self.model.ecommerce_details(row)
+        for source in self.attention_items.get(row["id"], {}).get("sources", []):
+            if not source.get("path"):
+                continue
+            item = (source.get("platform", "") + " PDF", source.get("sku") or "Missing in PDF",
+                    source.get("product", ""), source.get("variation", ""))
+            if item not in details:
+                details.append(item)
+        return details
+
+    def _row_tag(self, identity, number, selected=False):
+        if self.model.changed(identity):
+            return "dirtyselected" if selected else "dirty"
+        if identity in self.attention_items:
+            return "attentionselected" if selected else "attention"
+        return "selected" if selected else ("odd" if number % 2 == 0 else "")
 
     def _tip(self, widget, text):
         state = {"window": None, "timer": None}
@@ -545,6 +592,11 @@ class ProductsDialog(tk.Toplevel):
         if region == "heading" and field in LABELS:
             return self.model.sort_help(field)
         identity = self.tree.identify_row(event.y)
+        if identity and identity in self.attention_items:
+            if field == "details":
+                return self._attention_text(identity) + ". Click to view ecommerce names, variations and seller SKUs."
+            if field in ("sku", "alternative_product", "alternative_variation"):
+                return self._attention_text(identity) + ". Blank standard fields print the ecommerce text. Add missing SKUs on your ecommerce website."
         if identity and field == "sku" and not self.model.rows[identity].get("sku"):
             return "This earlier definition has no confirmed SKU. Its saved ecommerce names remain available for matching."
         if identity and field == "details":
@@ -581,7 +633,7 @@ class ProductsDialog(tk.Toplevel):
             return
         heading = tkfont.Font(self, font=("Segoe UI", 11, "bold"))
         body = tkfont.Font(self, font=("Segoe UI", 12))
-        row_number_width = max(106, body.measure("  " + str(max(1, len(self.model.rows))) + " *")+58)
+        row_number_width = max(106, body.measure("  " + str(max(1, len(self.model.rows))) + " ! *")+58)
         self.tree.column("#0", width=row_number_width, minwidth=row_number_width)
         details = max(180, heading.measure("Ecommerce Details")+20, body.measure("View details (999)")+18)
         size = max(145, heading.measure("Size ↑ Smallest")+18)
@@ -606,15 +658,25 @@ class ProductsDialog(tk.Toplevel):
         if children:
             self.tree.delete(*children)
         needs_names = self.needs_names.get() if hasattr(self, "needs_names") else False
-        rows = self.model.sorted_rows(self.search_var.get(), needs_names)
+        attention = catalog_attention({"rows": list(self.model.rows.values())}, self.source_issues)
+        self.attention_items = {item["id"]: item for item in attention["items"] if item["id"] in self.model.rows}
+        rows = self.model.sorted_rows(self.search_var.get(), needs_names, self.attention_items)
+        if needs_names and self.attention_scope_ids is not None:
+            rows = [row for row in rows if row["id"] in self.attention_scope_ids]
+        scope = " for these PDFs" if self.attention_scope_ids is not None else " below"
+        self.info_var.set(f"! Define Product Name and Size{scope}. Unlock editing, then unlock a row.\nGeneration stays available. Add missing seller SKUs on your ecommerce website."
+                          if needs_names else "SKU keeps your Product Name and Size linked when ecommerce text changes.\n! Amber rows need SKU, Product Name or Size. Blank fields print ecommerce text.")
         for number, row in enumerate(rows, 1):
             identity = row["id"]
-            details_count = len(self.model.ecommerce_details(row))
-            values = [row.get("sku") or "Needs SKU review", row.get("alternative_product", ""), row.get("alternative_variation", ""),
+            details_count = len(self._details_for_row(row))
+            product_name = row.get("alternative_product", "").strip() or "[Ecommerce] " + (row.get("original_product") or "Name not supplied")
+            size = row.get("alternative_variation", "").strip() or "[Ecommerce] " + (row.get("original_variation") or "Variation not supplied")
+            values = [row.get("sku") or "! SKU missing", product_name, size,
                       f"View details ({details_count})", row.get("original_product", ""), row.get("original_variation", "")]
             changed = self.model.changed(identity)
-            tags = ("dirty",) if changed else (("odd",) if number % 2 == 0 else ())
-            self.tree.insert("", "end", iid=identity, text=f"  {number}{' *' if changed else ''}", image=self.closed_icon if row.get("locked") else self.open_icon, values=values, tags=tags)
+            tag = self._row_tag(identity, number)
+            marker = (" !" if identity in self.attention_items else "") + (" *" if changed else "")
+            self.tree.insert("", "end", iid=identity, text=f"  {number}{marker}", image=self.closed_icon if row.get("locked") else self.open_icon, values=values, tags=(tag,) if tag else ())
         self.tree.selection_set([identity for identity in selected if self.tree.exists(identity)])
         self.tree.yview_moveto(yview)
         for field in LABELS:
@@ -625,11 +687,11 @@ class ProductsDialog(tk.Toplevel):
             arrow = " ↓ " if desc else " ↑ "
             self.tree.heading(field, text=LABELS[field] + (arrow + suffix if active else ""))
         if hasattr(self, "count_var"):
-            missing = sum(not row.get("sku") for row in self.model.rows.values())
             locked = sum(bool(row.get("locked")) for row in self.model.rows.values())
-            text = f"{len(rows):,} of {len(self.model.rows):,} products  ·  {locked:,} locked / {len(self.model.rows)-locked:,} editable rows"
-            if missing:
-                text += f"  ·  {missing:,} need SKU review"
+            text = f"{len(rows):,} / {len(self.model.rows):,} products  ·  {locked:,} locked"
+            attention_count = len(self.attention_items.keys() & self.attention_scope_ids) if needs_names and self.attention_scope_ids is not None else len(self.attention_items)
+            if attention_count:
+                text += f"  ·  ! {attention_count:,} need attention"
             self.count_var.set(text)
         self._state()
 
@@ -668,8 +730,7 @@ class ProductsDialog(tk.Toplevel):
         self.model.selection_order = [identity for identity in self.model.selection_order if identity in selection]
         self.model.selection_order.extend(identity for identity in selection if identity not in self.model.selection_order)
         for number, identity in enumerate(self.tree.get_children(), 1):
-            changed = self.model.changed(identity)
-            tag = ("dirtyselected" if changed else "selected") if identity in selection else ("dirty" if changed else ("odd" if number % 2 == 0 else ""))
+            tag = self._row_tag(identity, number, identity in selection)
             self.tree.item(identity, tags=(tag,) if tag else ())
         self._state()
 
@@ -804,7 +865,8 @@ class ProductsDialog(tk.Toplevel):
         frame.columnconfigure(1, weight=1)
         ttk.Label(frame, text="Edit product" if identity else "Add product", style="Products.Title.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 12))
         fields = ["sku", "alternative_product", "alternative_variation"]
-        if self.show_ecommerce.get():
+        show_source_evidence = bool(identity and identity in self.attention_items)
+        if self.show_ecommerce.get() or show_source_evidence:
             fields += ["original_product", "original_variation"]
         entries = {}
         focus = None
@@ -813,12 +875,17 @@ class ProductsDialog(tk.Toplevel):
             entry = ttk.Entry(frame, width=54, font=("Segoe UI", 12))
             entry.insert(0, row.get(field, ""))
             entry.grid(row=number, column=1, sticky="ew", pady=7)
-            if field == "sku" and identity and self.model.saved.get(identity, {}).get("sku"):
+            if (field == "sku" and identity and self.model.saved.get(identity, {}).get("sku")) or (show_source_evidence and field.startswith("original_") and not self.show_ecommerce.get()):
                 entry.configure(state="readonly")
             elif focus is None:
                 focus = entry
             entries[field] = entry
         hint = "Saved SKUs keep their existing ecommerce links. Blank Product Name or Size uses the ecommerce text."
+        if identity and not row.get("sku"):
+            hint = "You may leave SKU blank and save Product Name and Size for this ecommerce listing. Add its SKU on your ecommerce website to keep future name changes linked. Blank standard fields print the ecommerce text."
+            focus = entries["alternative_product"] if not row.get("alternative_product", "").strip() else entries["alternative_variation"]
+        elif show_source_evidence:
+            hint = self._attention_text(identity) + ". " + hint
         ttk.Label(frame, text=hint, wraplength=600, style="Products.Muted.TLabel").grid(row=len(fields)+1, column=0, columnspan=2, sticky="w", pady=(12, 4))
         error = tk.StringVar()
         ttk.Label(frame, textvariable=error, wraplength=600, style="Products.Muted.TLabel").grid(row=len(fields)+2, column=0, columnspan=2, sticky="w", pady=(0, 8))
@@ -826,7 +893,7 @@ class ProductsDialog(tk.Toplevel):
         actions.grid(row=len(fields)+3, column=0, columnspan=2, sticky="e")
 
         def done():
-            values = {key: entry.get() for key, entry in entries.items()}
+            values = {key: entry.get() for key, entry in entries.items() if "readonly" not in entry.state()}
             try:
                 if identity:
                     self.model.edit(identity, values)
@@ -884,6 +951,10 @@ class ProductsDialog(tk.Toplevel):
         title = "  ·  ".join(value for value in (row.get("alternative_product"), row.get("alternative_variation")) if value)
         ttk.Label(frame, text=title or "Product Name and Size have not been set.", style="Products.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 8))
         note = "These seller SKUs and earlier ecommerce listings use this product definition. Excel includes the linked originals."
+        if row["id"] in self.attention_items:
+            note = "! " + self._attention_text(row["id"]) + ". Blank standard fields print ecommerce text."
+            if "missing_sku" in self.attention_items[row["id"]]["reasons"]:
+                note += " Add the missing SKU on your ecommerce website, then use a new PDF. You may save Product Name and Size here now."
         if row.get("review_notes"):
             note += "\nReview: " + "; ".join(row["review_notes"])
         ttk.Label(frame, text=note, wraplength=1050, style="Products.Muted.TLabel").grid(row=2, column=0, sticky="ew", pady=(0, 12))
@@ -892,7 +963,7 @@ class ProductsDialog(tk.Toplevel):
         body.columnconfigure(0, weight=1)
         body.rowconfigure(0, weight=1)
         tree = ttk.Treeview(body, columns=("platform", "sku", "product", "variation"), show="headings", selectmode="browse", style="Products.Treeview")
-        details = self.model.ecommerce_details(row)
+        details = self._details_for_row(row)
         direction = {}
 
         def show_sorted(field):
@@ -994,9 +1065,14 @@ class ProductsDialog(tk.Toplevel):
                     approvals.append(group["ids"])
 
             def saved(result):
+                if self.attention_scope_ids is not None:
+                    self.attention_scope_ids = remap_attention_ids(
+                        {"rows": list(self.model.rows.values())}, result, self.attention_scope_ids)
                 self.model.load(result)
                 self._refresh()
                 self.status_var.set("Names saved. All product rows are locked." if lock_all else "Names saved. Explicit row unlocks are kept for Excel editing.")
+                if self.on_catalog_changed:
+                    self.on_catalog_changed(result)
                 if on_saved:
                     on_saved(result)
 

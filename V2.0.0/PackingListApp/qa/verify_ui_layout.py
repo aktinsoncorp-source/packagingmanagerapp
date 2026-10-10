@@ -39,6 +39,8 @@ def verify(output):
                 ]
                 app.checked = {row["path"] for row in app.entries[:2]}
                 app._populate_files()
+                # Exercise the extra header control at its widest realistic count.
+                app._set_name_attention({"count": 1278, "items": []})
                 app.summary_var.set("Packing PDFs · 190 new orders · 15 need attention")
                 app.update()
                 windowsize = (app.winfo_width(), app.winfo_height())
